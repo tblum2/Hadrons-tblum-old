@@ -255,7 +255,7 @@ void        makeFileDir(const std::string filename, GridBase *g = nullptr);
 
 // default Schur convention
 #ifndef HADRONS_DEFAULT_SCHUR 
-#define HADRONS_DEFAULT_SCHUR DiagTwo
+#define HADRONS_DEFAULT_SCHUR Staggered
 #endif
 #define _HADRONS_SCHUR_OP_(conv) Schur##conv##Operator
 #define HADRONS_SCHUR_OP(conv) _HADRONS_SCHUR_OP_(conv)

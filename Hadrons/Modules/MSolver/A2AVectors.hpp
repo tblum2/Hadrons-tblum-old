@@ -51,6 +51,7 @@ public:
                                   std::string, noise,
                                   std::string, action,
                                   std::string, eigenPack,
+                                  double, mass,
                                   std::string, solver,
                                   std::string, output,
                                   bool,        multiFile);
@@ -320,7 +321,7 @@ void TStagA2AVectors<FImpl, Pack>::setup(void)
 {
     bool        hasLowModes = (!par().eigenPack.empty());
     std::string sub_string  = (hasLowModes) ? "_subtract" : "";
-    auto        &noise      = envGet(SpinColorDiagonalNoise<FImpl>, par().noise);
+    auto        &noise      = envGet(ColorDiagonalNoise<FImpl>, par().noise);
     auto        &action     = envGet(FMat, par().action);
     auto        &solver     = envGet(Solver, par().solver + sub_string);
     int         Ls          = env().getObjectLs(par().action);
@@ -332,9 +333,9 @@ void TStagA2AVectors<FImpl, Pack>::setup(void)
         Nl_ = epack.evec.size();
     }
     envCreate(std::vector<FermionField>, getName() + "_v", 1,
-              2*Nl_ + noise.size(), envGetGrid(FermionField));
+              2*Nl_ + noise.fermSize(), envGetGrid(FermionField));
     envCreate(std::vector<FermionField>, getName() + "_w", 1,
-              2*Nl_ + noise.size(), envGetGrid(FermionField));
+              2*Nl_ + noise.fermSize(), envGetGrid(FermionField));
     if (Ls > 1)
     {
         envTmpLat(FermionField, "f5", Ls);
@@ -351,7 +352,7 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
     std::string sub_string = (Nl_ > 0) ? "_subtract" : "";
     auto        &action    = envGet(FMat, par().action);
     auto        &solver    = envGet(Solver, par().solver + sub_string);
-    auto        &noise     = envGet(SpinColorDiagonalNoise<FImpl>, par().noise);
+    auto        &noise     = envGet(ColorDiagonalNoise<FImpl>, par().noise);
     auto        &v         = envGet(std::vector<FermionField>, getName() + "_v");
     auto        &w         = envGet(std::vector<FermionField>, getName() + "_w");
     int         Ls         = env().getObjectLs(par().action);
@@ -366,7 +367,7 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
         LOG(Message) << "Computing all-to-all vectors "
         << " using eigenpack '" << par().eigenPack << "' ("
         << 2*Nl_ << " low modes) and noise '"
-        << par().noise << "' (" << noise.size()
+        << par().noise << "' (" << noise.fermSize()
         << " noise vectors)" << std::endl;
     }
     else
@@ -384,6 +385,7 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
         std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
         
         startTimer("V low mode");
+        LOG(Message) << "V vector i = " << 2*il << ", " << 2*il+1 << " (low modes)" << std::endl;
         if (Ls == 1)
         {
             a2a.makeLowModeV(v[2*il], epack.evec[il], eval);
@@ -399,7 +401,7 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
         }
         stopTimer("V low mode");
         startTimer("W low mode");
-        LOG(Message) << "W vector i = " << il << " (low mode)" << std::endl;
+        LOG(Message) << "W vector i = " << 2*il << ", " << 2*il+1 << " (low modes)" << std::endl;
         if (Ls == 1)
         {
             a2a.makeLowModeW(w[2*il], epack.evec[il], eval);
@@ -417,38 +419,39 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
     }
     
     // High modes
-    for (unsigned int ih = 0; ih < noise.size(); ih++)
+#if 1
+    for (unsigned int ih = 0; ih < noise.fermSize(); ih++)
     {
         startTimer("V high mode");
-        LOG(Message) << "V vector i = " << Nl_ + ih
+        LOG(Message) << "V vector i = " << 2*Nl_ + ih
         << " (" << ((Nl_ > 0) ? "high " : "")
         << "stochastic mode)" << std::endl;
         if (Ls == 1)
         {
-            a2a.makeHighModeV(v[2*Nl_ + ih], noise[ih]);
+            a2a.makeHighModeV(v[2*Nl_ + ih], noise.getFerm(ih));
         }
         else
         {
             envGetTmp(FermionField, f5);
-            a2a.makeHighModeV5D(v[2*Nl_ + ih], f5, noise[ih]);
+            a2a.makeHighModeV5D(v[2*Nl_ + ih], f5, noise.getFerm(ih));
         }
         stopTimer("V high mode");
         startTimer("W high mode");
-        LOG(Message) << "W vector i = " << Nl_ + ih
+        LOG(Message) << "W vector i = " << 2*Nl_ + ih
         << " (" << ((Nl_ > 0) ? "high " : "")
         << "stochastic mode)" << std::endl;
         if (Ls == 1)
         {
-            a2a.makeHighModeW(w[2*Nl_ + ih], noise[ih]);
+            a2a.makeHighModeW(w[2*Nl_ + ih], noise.getFerm(ih));
         }
         else
         {
             envGetTmp(FermionField, f5);
-            a2a.makeHighModeW5D(w[2*Nl_ + ih], f5, noise[ih]);
+            a2a.makeHighModeW5D(w[2*Nl_ + ih], f5, noise.getFerm(ih));
         }
         stopTimer("W high mode");
     }
-    
+#endif
     // I/O if necessary
     if (!par().output.empty())
     {

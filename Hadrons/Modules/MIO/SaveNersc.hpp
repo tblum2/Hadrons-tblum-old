@@ -112,7 +112,8 @@ void TSaveNersc<GImpl>::execute(void)
 
     auto &U = envGet(GaugeField, par().gauge);
     makeFileDir(fileName, U.Grid());
-    NerscIO::writeConfiguration(U, fileName, par().ensembleLabel);
+    //NerscIO::writeConfiguration(U, fileName, par().ensembleLabel); //WTF?!
+    NerscIO::writeConfiguration(U, fileName, 0,1);
 }
 
 END_MODULE_NAMESPACE

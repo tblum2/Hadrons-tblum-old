@@ -1,5 +1,5 @@
 /*
- * A2AVectors.cpp, part of Hadrons (https://github.com/aportelli/Hadrons)
+ * TimeDilutedSpinColorDiagonal.cpp, part of Hadrons (https://github.com/aportelli/Hadrons)
  *
  * Copyright (C) 2015 - 2020
  *
@@ -23,12 +23,10 @@
  */
 
 /*  END LEGAL */
-#include <Hadrons/Modules/MSolver/A2AVectors.hpp>
+#include <Hadrons/Modules/MNoise/TimeDilutedColorDiagonal.hpp>
 
 using namespace Grid;
 using namespace Hadrons;
-using namespace MSolver;
+using namespace MNoise;
 
-template class Grid::Hadrons::MSolver::TA2AVectors<FIMPL, BaseFermionEigenPack<FIMPL>>;
-template class Grid::Hadrons::MSolver::TA2AVectors<ZFIMPL, BaseFermionEigenPack<ZFIMPL>>;
-template class Grid::Hadrons::MSolver::TStagA2AVectors<STAGIMPL, BaseFermionEigenPack<STAGIMPL>>;
+template class Grid::Hadrons::MNoise::TTimeDilutedColorDiagonal<STAGIMPL>;

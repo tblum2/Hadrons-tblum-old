@@ -78,6 +78,52 @@ protected:
     void              setPropagator(LatticeComplex & eta);
 };
 
+
+/******************************************************************************
+ *      Abstract container for  color diagonal noise              *
+ ******************************************************************************/
+template <typename FImpl>
+class ColorDiagonalNoise
+{
+public:
+    typedef typename FImpl::FermionField FermionField;
+    typedef typename FImpl::PropagatorField PropagatorField;
+public:
+    // constructor/destructor
+    ColorDiagonalNoise(GridCartesian *g);
+    ColorDiagonalNoise(GridCartesian *g, const int nNoise);
+    virtual ~ColorDiagonalNoise(void) = default;
+    // access
+    std::vector<LatticeComplex> &       getNoise(void);
+    const std::vector<LatticeComplex> & getNoise(void) const;
+    FermionField &                      getFerm(const int i);
+    PropagatorField &                   getProp(const int i);
+    void                                resize(const int nNoise);
+    int                                 size(void) const;
+    int                                 fermSize(void) const;
+    virtual int                         dilutionSize(void) const = 0;
+    GridCartesian                       *getGrid(void) const;
+    // generate noise
+    void generateNoise(GridParallelRNG &rng);
+private:
+    void         setFerm(const int i);
+    virtual void setProp(const int i) = 0;
+    LatticeComplex                 eta_;
+    FermionField                   ferm_;
+    GridCartesian                  *grid_;
+    std::vector<LatticeComplex>    noise_;
+    PropagatorField                prop_;
+protected:
+    LatticeComplex &  getEta(void);
+    FermionField &    getFerm(void);
+    int               getNd(void) const;
+    int               getNsc(void) const;
+    PropagatorField & getProp(void);
+    void              setPropagator(LatticeComplex & eta);
+};
+
+
+
 template <typename FImpl>
 class TimeDilutedNoise: public SpinColorDiagonalNoise<FImpl>
 {
@@ -89,6 +135,23 @@ public:
     TimeDilutedNoise(GridCartesian *g);
     TimeDilutedNoise(GridCartesian *g, const int nNoise);
     virtual ~TimeDilutedNoise(void) = default;
+    int dilutionSize(void) const;
+private:
+    void setProp(const int i);
+    Lattice<iScalar<vInteger>> tLat_;
+};
+
+template <typename FImpl>
+class StagTimeDilutedNoise: public ColorDiagonalNoise<FImpl>
+{
+public:
+    typedef typename FImpl::FermionField FermionField;
+    typedef typename FImpl::PropagatorField PropagatorField;
+public:
+    // constructor/destructor
+    StagTimeDilutedNoise(GridCartesian *g);
+    StagTimeDilutedNoise(GridCartesian *g, const int nNoise);
+    virtual ~StagTimeDilutedNoise(void) = default;
     int dilutionSize(void) const;
 private:
     void setProp(const int i);
@@ -143,6 +206,7 @@ private:
     int nSparse_;
     LatticeInteger coor_;
 };
+
 /******************************************************************************
  *               SpinColorDiagonalNoise template implementation               *
  ******************************************************************************/
@@ -278,8 +342,151 @@ void SpinColorDiagonalNoise<FImpl>::generateNoise(GridParallelRNG &rng)
     }
 }
 
+
+
 /******************************************************************************
- *                  TimeDilutedNoise template implementation                  *
+ *    ColorDiagonalNoise template implementation               *
+ ******************************************************************************/
+template <typename FImpl>
+ColorDiagonalNoise<FImpl>::ColorDiagonalNoise(GridCartesian *g)
+: grid_(g), ferm_(g), prop_(g), eta_(g)
+{}
+
+template <typename FImpl>
+ColorDiagonalNoise<FImpl>::ColorDiagonalNoise(GridCartesian *g,
+                                              const int nNoise)
+: ColorDiagonalNoise(g)
+{
+    resize(nNoise);
+}
+
+template <typename FImpl>
+std::vector<LatticeComplex> & ColorDiagonalNoise<FImpl>::
+getNoise(void)
+{
+    return noise_;
+}
+
+template <typename FImpl>
+const std::vector<LatticeComplex> & ColorDiagonalNoise<FImpl>::
+getNoise(void) const
+{
+    return noise_;
+}
+
+template <typename FImpl>
+void ColorDiagonalNoise<FImpl>::setFerm(const int i)
+{
+    //int nc  = FImpl::Dimension;
+    //std::div_t divs;
+    //divs = std::div(i, nc);
+
+    PropToFerm<FImpl>(ferm_, prop_, i);
+}
+
+template <typename FImpl>
+typename ColorDiagonalNoise<FImpl>::FermionField &
+ColorDiagonalNoise<FImpl>::getFerm(void)
+{
+    return ferm_;
+}
+
+template <typename FImpl>
+typename ColorDiagonalNoise<FImpl>::FermionField &
+ColorDiagonalNoise<FImpl>::getFerm(const int i)
+{
+    auto nsc   = this->getNsc();
+    std::div_t divs;
+    divs = std::div(i, nsc);
+    // both should be remainder?
+    //LOG(Message) << "setProp i= " << divs.rem << std::endl;
+    setProp(divs.rem);
+    setFerm(divs.rem);
+    return getFerm();
+}
+
+template <typename FImpl>
+void ColorDiagonalNoise<FImpl>::setPropagator(LatticeComplex & eta)
+{
+    prop_ = 1.;
+    prop_ = prop_*eta;
+}
+
+template <typename FImpl>
+typename ColorDiagonalNoise<FImpl>::PropagatorField &
+ColorDiagonalNoise<FImpl>::getProp(void)
+{
+    return prop_;
+}
+
+template <typename FImpl>
+typename ColorDiagonalNoise<FImpl>::PropagatorField &
+ColorDiagonalNoise<FImpl>::getProp(const int i)
+{
+    setProp(i);
+    return getProp();
+}
+
+template <typename FImpl>
+int ColorDiagonalNoise<FImpl>::size(void) const
+{
+    return noise_.size();
+}
+
+template <typename FImpl>
+int ColorDiagonalNoise<FImpl>::fermSize(void) const
+{
+    return dilutionSize()*getNsc();
+}
+
+template <typename FImpl>
+LatticeComplex & ColorDiagonalNoise<FImpl>::getEta(void)
+{
+    return eta_;
+}
+
+template <typename FImpl>
+int ColorDiagonalNoise<FImpl>::getNd(void) const
+{
+    return grid_->GlobalDimensions().size();
+}
+
+template <typename FImpl>
+int ColorDiagonalNoise<FImpl>::getNsc(void) const
+{
+    return FImpl::Dimension;
+}
+
+template <typename FImpl>
+void ColorDiagonalNoise<FImpl>::resize(const int nNoise)
+{
+    noise_.resize(nNoise, grid_);
+}
+
+template <typename FImpl>
+GridCartesian * ColorDiagonalNoise<FImpl>::getGrid(void) const
+{
+    return grid_;
+}
+
+template <typename FImpl>
+void ColorDiagonalNoise<FImpl>::generateNoise(GridParallelRNG &rng)
+{
+    Complex        shift(1., 1.);
+    for (int n = 0; n < noise_.size(); ++n)
+    {
+        //LOG(Message) << "color diagonal noise n= " << n << std::endl;
+        bernoulli(rng, eta_);
+        eta_ = (2.*eta_ - shift)*(1./::sqrt(2.));
+        noise_[n] = eta_;
+    }
+}
+
+
+
+
+/******************************************************************************
+ *    TimeDilutedNoise template implementation                  *
  ******************************************************************************/
 template <typename FImpl>
 TimeDilutedNoise<FImpl>::
@@ -296,6 +503,39 @@ int TimeDilutedNoise<FImpl>::dilutionSize() const
 
 template <typename FImpl>
 void TimeDilutedNoise<FImpl>::setProp(const int i)
+{
+    auto eta   = this->getEta();
+    auto noise = this->getNoise();
+    auto nd    = this->getNd();
+    auto nt    = this->getGrid()->GlobalDimensions()[Tp];
+
+    LatticeCoordinate(tLat_, nd - 1);
+
+    std::div_t divs = std::div(i, nt);
+    int t = divs.rem;
+
+    eta = where((tLat_ == t), noise[divs.quot], 0.*noise[divs.quot]);
+    this->setPropagator(eta);
+}
+
+/******************************************************************************
+ * StagTimeDilutedNoise template implementation                  *
+ ******************************************************************************/
+template <typename FImpl>
+StagTimeDilutedNoise<FImpl>::
+StagTimeDilutedNoise(GridCartesian *g, int nNoise)
+: ColorDiagonalNoise<FImpl>(g, nNoise), tLat_(g)
+{}
+
+template <typename FImpl>
+int StagTimeDilutedNoise<FImpl>::dilutionSize() const
+{
+    auto nt = this->getGrid()->GlobalDimensions()[Tp];
+    return nt*this->size();
+}
+
+template <typename FImpl>
+void StagTimeDilutedNoise<FImpl>::setProp(const int i)
 {
     auto eta   = this->getEta();
     auto noise = this->getNoise();
