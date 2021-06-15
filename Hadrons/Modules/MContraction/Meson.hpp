@@ -33,6 +33,7 @@
 #include <Hadrons/Global.hpp>
 #include <Hadrons/Module.hpp>
 #include <Hadrons/ModuleFactory.hpp>
+#include <Hadrons/Modules/MSource/Point.hpp>
 
 BEGIN_HADRONS_NAMESPACE
 
@@ -67,6 +68,7 @@ public:
                                     std::string, q2,
                                     std::string, gammas,
                                     std::string, sink,
+                                    std::string, source,
                                     std::string, output);
 };
 
@@ -104,7 +106,43 @@ protected:
     virtual void execute(void);
 };
 
+template <typename FImpl1, typename FImpl2>
+class TStagMeson: public Module<MesonPar>
+{
+public:
+    FERM_TYPE_ALIASES(FImpl1, 1);
+    FERM_TYPE_ALIASES(FImpl2, 2);
+    BASIC_TYPE_ALIASES(ScalarImplCR, Scalar);
+    SINK_TYPE_ALIASES(Scalar);
+    class Result: Serializable
+    {
+    public:
+        GRID_SERIALIZABLE_CLASS_MEMBERS(Result,
+                                        Gamma::Algebra, gamma_snk,
+                                        Gamma::Algebra, gamma_src,
+                                        std::vector<Complex>, corr);
+    };
+public:
+    // constructor
+    TStagMeson(const std::string name);
+    // destructor
+    virtual ~TStagMeson(void) {};
+    // dependencies/products
+    virtual std::vector<std::string> getInput(void);
+    virtual std::vector<std::string> getOutput(void);
+    virtual void parseGammaString();
+protected:
+    // execution
+    virtual void setup(void);
+    // execution
+    virtual void execute(void);
+private:
+    std::vector<Gamma::Algebra>        gammaList;
+    std::vector<RealD>               stag_phase_source;
+};
+
 MODULE_REGISTER_TMP(Meson, ARG(TMeson<FIMPL, FIMPL>), MContraction);
+MODULE_REGISTER_TMP(StagMeson, ARG(TStagMeson<STAGIMPL, STAGIMPL>), MContraction);
 
 /******************************************************************************
  *                           TMeson implementation                            *
@@ -241,6 +279,176 @@ void TMeson<FImpl1, FImpl2>::execute(void)
                 SinkFnScalar &sink = envGet(SinkFnScalar, par().sink);
                 
                 c   = trace(mesonConnected(q1, q2, gSnk, gSrc));
+                buf = sink(c);
+            }
+            for (unsigned int t = 0; t < buf.size(); ++t)
+            {
+                result[i].corr[t] = TensorRemove(buf[t]);
+            }
+        }
+    }
+    saveResult(par().output, "meson", result);
+}
+
+/******************************************************************************
+ *                           TStagMeson implementation                            *
+ ******************************************************************************/
+// constructor /////////////////////////////////////////////////////////////////
+template <typename FImpl1, typename FImpl2>
+TStagMeson<FImpl1, FImpl2>::TStagMeson(const std::string name)
+: Module<MesonPar>(name)
+{}
+
+// dependencies/products ///////////////////////////////////////////////////////
+template <typename FImpl1, typename FImpl2>
+std::vector<std::string> TStagMeson<FImpl1, FImpl2>::getInput(void)
+{
+    std::vector<std::string> input = {par().q1, par().q2, par().sink, par().source};
+    
+    return input;
+}
+
+template <typename FImpl1, typename FImpl2>
+std::vector<std::string> TStagMeson<FImpl1, FImpl2>::getOutput(void)
+{
+    std::vector<std::string> output = {};
+    
+    return output;
+}
+
+template <typename FImpl1, typename FImpl2>
+void TStagMeson<FImpl1, FImpl2>::parseGammaString()
+{
+    gammaList.clear();
+    
+    // Determine gamma matrices to insert at source/sink.
+    // only gamma-src = gamma-snk supported for now
+    if (par().gammas.compare("all") == 0)
+    {
+        // Do diagonal contractions, g5,gi(i=1,2,3).
+        gammaList.push_back(Gamma::Algebra::Gamma5);
+        gammaList.push_back(Gamma::Algebra::GammaX);
+        gammaList.push_back(Gamma::Algebra::GammaY);
+        gammaList.push_back(Gamma::Algebra::GammaZ);
+    }
+    else
+    {
+        // Parse individual contractions from input string.
+        gammaList = strToVec<Gamma::Algebra>(par().gammas);
+    }
+}
+
+// setup ///////////////////////////////////////////////////////////////////
+template <typename FImpl1, typename FImpl2>
+void TStagMeson<FImpl1, FImpl2>::setup(void)
+{
+    envTmpLat(LatticeComplex, "c");
+    parseGammaString();
+    int Ngam=gammaList.size();
+
+    // grid can't handle real * prop, so use complex
+    envTmp(std::vector<LatticeComplex>,  "stag_phase_sink", 1, Ngam,
+           LatticeComplex(env().getGrid()));
+    envGetTmp(std::vector<LatticeComplex>,stag_phase_sink);
+    stag_phase_source.resize(Ngam);
+    
+    Lattice<iScalar<vInteger> > x(env().getGrid()); LatticeCoordinate(x,0);
+    Lattice<iScalar<vInteger> > y(env().getGrid()); LatticeCoordinate(y,1);
+    Lattice<iScalar<vInteger> > z(env().getGrid()); LatticeCoordinate(z,2);
+    
+    // coordinate of source
+    std::vector<int> src_coor = strToVec<int>(static_cast<MSource::StagPoint *>(vm().getModule(par().source))->par().position);
+    // local taste non-singlet ops, including ``Hermiticity" phase,
+    // see Tab. 11.2 in Degrand and Detar
+    for(int i=0; i < gammaList.size(); i++){
+
+        stag_phase_sink[i] = 1.0;
+        stag_phase_source[i] = 1.0;
+        
+        LOG(Message) << "Using gamma: " << gammaList[i] << std::endl;
+        switch(gammaList[i]) {
+                
+            case Gamma::Algebra::GammaX  :
+                stag_phase_sink[i] = where( mod(x,2)==(Integer)0, stag_phase_sink[i], -stag_phase_sink[i]);
+                if((src_coor[0])%2) stag_phase_source[i]= -stag_phase_source[i];
+                break;
+                
+            case Gamma::Algebra::GammaY  :
+                stag_phase_sink[i] = where( mod(y,2)==(Integer)0, stag_phase_sink[i], -stag_phase_sink[i]);
+                if((src_coor[1])%2) stag_phase_source[i]= -stag_phase_source[i];
+                break;
+                
+            case Gamma::Algebra::GammaZ  :
+                stag_phase_sink[i] = where( mod(z,2)==(Integer)0, stag_phase_sink[i], -stag_phase_sink[i]);
+                if((src_coor[2])%2) stag_phase_source[i] = -stag_phase_source[i];
+                break;
+
+            case Gamma::Algebra::Gamma5  :
+                break;
+
+            default :
+                std::cout << "your gamma is not supported for stag meson" << std::endl;
+                assert(0);
+        }
+    }
+}
+
+// execution ///////////////////////////////////////////////////////////////////
+#define StagMesonConnected(q1, q2, gSnk, gSrc) \
+(gSnk)*(q1)*adj(q2)*(gSrc)
+
+template <typename FImpl1, typename FImpl2>
+void TStagMeson<FImpl1, FImpl2>::execute(void)
+{
+    LOG(Message) << "Computing meson contractions '" << getName() << "' using"
+    << " quarks '" << par().q1 << "' and '" << par().q2 << "'"
+    << std::endl;
+    
+    std::vector<TComplex>  buf;
+    std::vector<Result>    result;
+    int                    nt = env().getDim(Tp);
+    // staggered gammas
+    envGetTmp(std::vector<LatticeComplex>,stag_phase_sink);
+    
+    result.resize(gammaList.size());
+    for (unsigned int i = 0; i < result.size(); ++i)
+    {
+        result[i].gamma_snk = gammaList[i];
+        result[i].gamma_src = gammaList[i];
+        result[i].corr.resize(nt);
+    }
+    if (envHasType(SlicedPropagator1, par().q1) and
+        envHasType(SlicedPropagator2, par().q2))
+    {
+        LOG(Message) << "(sliced staggered propagator not implemented)" << std::endl;
+        assert(0);
+    }
+    else
+    {
+        auto &q1 = envGet(PropagatorField1, par().q1);
+        auto &q2 = envGet(PropagatorField2, par().q2);
+        
+        envGetTmp(LatticeComplex, c);
+        //envGetTmp(LatticeComplex, phase);
+        
+        //LOG(Message) << "(source position '" << location << "')" << std::endl;
+        
+        LOG(Message) << "(using sink '" << par().sink << "')" << std::endl;
+        for (unsigned int i = 0; i < result.size(); ++i)
+        {
+            std::string ns;
+            
+            ns = vm().getModuleNamespace(env().getObjectModule(par().sink));
+            if (ns == "MSource")
+            {
+                PropagatorField1 &sink = envGet(PropagatorField1, par().sink);
+                c = trace(StagMesonConnected(q1, q2, stag_phase_sink[i], stag_phase_source[i]));
+                sliceSum(c, buf, Tp);
+            }
+            else if (ns == "MSink")
+            {
+                SinkFnScalar &sink = envGet(SinkFnScalar, par().sink);
+                c   = trace(StagMesonConnected(q1, q2, stag_phase_sink[i], stag_phase_source[i]));
                 buf = sink(c);
             }
             for (unsigned int t = 0; t < buf.size(); ++t)

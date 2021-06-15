@@ -305,6 +305,18 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
                             std::to_string(mu);
                         saveResult(outFileName, "mesonLL", result);
                     }
+                    // do the local Goldstone pion
+                    corr = trace(adj(q1) * q1);
+                    sliceSum(corr, buf, Tp);
+                    for (unsigned int tsnk = 0; tsnk < buf.size(); ++tsnk){
+                        result.corr[tsnk] = TensorRemove(buf[tsnk]);
+                    }
+                    outFileName = par().output+"local_pion_"+
+                        std::to_string(x)+"_"+
+                        std::to_string(y)+"_"+
+                        std::to_string(z)+"_"+
+                        std::to_string(t);
+                    saveResult(outFileName, "mesonLL", result);
                 }
             }
         }
