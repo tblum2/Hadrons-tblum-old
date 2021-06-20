@@ -67,6 +67,7 @@ public:
 };
 
 MODULE_REGISTER_TMP(LoadA2AVectors, TLoadA2AVectors<FIMPL>, MIO);
+MODULE_REGISTER_TMP(StagLoadA2AVectors, TLoadA2AVectors<STAGIMPL>, MIO);
 
 /******************************************************************************
  *                      TLoadA2AVectors implementation                        *
