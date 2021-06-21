@@ -174,6 +174,21 @@ private:
 };
 
 template <typename FImpl>
+class StagFullVolumeNoise: public ColorDiagonalNoise<FImpl>
+{
+public:
+    typedef typename FImpl::FermionField FermionField;
+    typedef typename FImpl::PropagatorField PropagatorField;
+public:
+    // constructor/destructor
+    StagFullVolumeNoise(GridCartesian *g, const int nNoise);
+    virtual ~StagFullVolumeNoise(void) = default;
+    int dilutionSize(void) const;
+private:
+    void setProp(const int i);
+};
+
+template <typename FImpl>
 class CheckerboardNoise: public SpinColorDiagonalNoise<FImpl>
 {
 public:
@@ -552,7 +567,29 @@ void StagTimeDilutedNoise<FImpl>::setProp(const int i)
 }
 
 /******************************************************************************
- *                   FullVolumeNoise template implementation                  *
+ *  StagFullVolumeNoise template implementation                  *
+ ******************************************************************************/
+template <typename FImpl>
+StagFullVolumeNoise<FImpl>::
+StagFullVolumeNoise(GridCartesian *g, int nNoise)
+: ColorDiagonalNoise<FImpl>(g, nNoise)
+{}
+
+template <typename FImpl>
+int StagFullVolumeNoise<FImpl>::dilutionSize() const
+{
+    return this->size();
+}
+
+template <typename FImpl>
+void StagFullVolumeNoise<FImpl>::setProp(const int i)
+{
+    auto noise = this->getNoise();
+    this->setPropagator(noise[i]);
+}
+
+/******************************************************************************
+ *  FullVolumeNoise template implementation                  *
  ******************************************************************************/
 template <typename FImpl>
 FullVolumeNoise<FImpl>::
