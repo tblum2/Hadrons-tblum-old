@@ -97,6 +97,8 @@ MODULE_REGISTER_TMP(MixedPrecisionRBPrecCG,
     ARG(TMixedPrecisionRBPrecCG<FIMPLF, FIMPLD, HADRONS_DEFAULT_LANCZOS_NBASIS>), MSolver);
 MODULE_REGISTER_TMP(ZMixedPrecisionRBPrecCG, 
     ARG(TMixedPrecisionRBPrecCG<ZFIMPLF, ZFIMPLD, HADRONS_DEFAULT_LANCZOS_NBASIS>), MSolver);
+MODULE_REGISTER_TMP(StagMixedPrecisionRBPrecCG,
+    ARG(TMixedPrecisionRBPrecCG<STAGIMPLF, STAGIMPLD, HADRONS_DEFAULT_LANCZOS_NBASIS>), MSolver);
 
 /******************************************************************************
  *                 TMixedPrecisionRBPrecCG implementation                             *
@@ -180,8 +182,9 @@ void TMixedPrecisionRBPrecCG<FImplInner, FImplOuter, nBasis>
             SchurFMatOuter somat(omat);
             MixedPrecisionConjugateGradient<FermionFieldOuter, FermionFieldInner> 
                 mpcg(par().residual, par().maxInnerIteration, 
-                     par().maxOuterIteration, 
-                     env().template getRbGrid<VTypeInner>(Ls),
+                     par().maxOuterIteration,
+                     //TB: changed (Ls) to () below so stag mixed works
+                     env().template getRbGrid<VTypeInner>(),
                      simat, somat);
                 mpcg.useGuesser(*guesserPt32);
             OperatorFunctionWrapper<FermionFieldOuter> wmpcg(mpcg);
