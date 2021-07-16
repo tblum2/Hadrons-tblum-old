@@ -415,7 +415,7 @@ ColorDiagonalNoise<FImpl>::getFerm(const int i)
     divs = std::div(i, nsc);
     // both should be remainder?
     //LOG(Message) << "setProp i= " << divs.rem << std::endl;
-    setProp(divs.rem);
+    setProp(divs.quot);
     setFerm(divs.rem);
     return getFerm();
 }

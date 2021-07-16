@@ -109,6 +109,11 @@ void TTimeDilutedColorDiagonal<FImpl>::execute(void)
 
     LOG(Message) << "Generating time-diluted, -color diagonal noise, num srcs= " << noise.size() << std::endl;
     noise.generateNoise(rng4d());
+#if 0
+    for(int i=0;i<noise.fermSize();i++){
+        LOG(Message) << noise.getFerm(i) << std::endl;
+    }
+    #endif
 }
 
 END_MODULE_NAMESPACE
