@@ -336,7 +336,7 @@ void A2AVectorsSchurStaggered<FImpl>::makeLowModeV(FermionField &vout,
     assert(sol_e_.Checkerboard() == Even);
     setCheckerboard(vout, sol_o_);
     assert(sol_o_.Checkerboard() == Odd);
-    vout *= sqrt(2); // since norm of all site evec is 2
+    vout *= 1/sqrt(2); // since norm of all site evec is 2
 }
 
 template <typename FImpl>
@@ -379,7 +379,7 @@ void A2AVectorsSchurStaggered<FImpl>::makeLowModeW(FermionField &wout,
     assert(sol_e_.Checkerboard() == Even);
     setCheckerboard(wout, sol_o_);
     assert(sol_o_.Checkerboard() == Odd);
-    wout *= sqrt(2); // since norm of all site evec is 2
+    wout *= 1/sqrt(2); // since norm of all site evec is 2
 }
 
 template <typename FImpl>
