@@ -228,7 +228,23 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
                     srcSite[1]=y;
                     srcSite[2]=z;
                     srcSite[3]=t;
-    
+                    
+                    outFileName = par().output+"/cc_2pt_"+
+                        std::to_string(x)+"_"+
+                        std::to_string(y)+"_"+
+                        std::to_string(z)+"_"+
+                        std::to_string(t)+"_mu_";
+                    std::string file = resultFilename(outFileName+"0","h5");
+                    bool f1 = std::__fs::filesystem::exists(file);
+                    file = resultFilename(outFileName+"1","h5");
+                    bool f2 = std::__fs::filesystem::exists(file);
+                    file = resultFilename(outFileName+"2","h5");
+                    bool f3 = std::__fs::filesystem::exists(file);
+                    if(f1 and f2 and f3){
+                        std::cout << "Skipping src point " << x << y << z << t << std::endl;
+                        continue;
+                    }
+                    
                     for (unsigned int c = 0; c < FImpl1::Dimension; ++c){
                         source = Zero();
                         Csrc=Zero();
