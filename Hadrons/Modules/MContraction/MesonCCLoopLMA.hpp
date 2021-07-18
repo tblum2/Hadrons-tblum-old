@@ -99,6 +99,10 @@ public:
     virtual void setup(void);
     // execution
     virtual void execute(void);
+    inline bool exists (const std::string& name) {
+      struct stat buffer;
+      return (stat (name.c_str(), &buffer) == 0);
+    }
     // low mode approx
     void LMA(const FermionField &src, FermionField &guess)
     // copied original from DeflatedGuesser.h
@@ -258,6 +262,25 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
                     srcSite[2]=z;
                     srcSite[3]=t;
                     assert((x+y+z+t)%2==0);// must be Even
+                    
+                    outFileName = par().output+"/cc_2pt_"+
+                        std::to_string(x)+"_"+
+                        std::to_string(y)+"_"+
+                        std::to_string(z)+"_"+
+                        std::to_string(t)+"_mu_";
+                    std::string file = resultFilename(outFileName+"0","h5");
+                    //bool f1 = std::__fs::filesystem::exists(file);
+                    bool f1 = exists(file);
+                    file = resultFilename(outFileName+"1","h5");
+                    //bool f2 = std::__fs::filesystem::exists(file);
+                    bool f2 = exists(file);
+                    file = resultFilename(outFileName+"2","h5");
+                    //bool f3 = std::__fs::filesystem::exists(file);
+                    bool f3 = exists(file);
+                    if(f1 and f2 and f3){
+                        std::cout << "Skipping src point " << x << y << z << t << std::endl;
+                        continue;
+                    }
                     
                     for (unsigned int c = 0; c < FImpl1::Dimension; ++c){
                         source = Zero();
