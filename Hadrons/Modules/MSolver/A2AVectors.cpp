@@ -32,3 +32,4 @@ using namespace MSolver;
 template class Grid::Hadrons::MSolver::TA2AVectors<FIMPL, BaseFermionEigenPack<FIMPL>>;
 template class Grid::Hadrons::MSolver::TA2AVectors<ZFIMPL, BaseFermionEigenPack<ZFIMPL>>;
 template class Grid::Hadrons::MSolver::TStagA2AVectors<STAGIMPL, BaseFermionEigenPack<STAGIMPL>>;
+template class Grid::Hadrons::MSolver::TStagNoEvalA2AVectors<STAGIMPL, BaseFermionEigenPack<STAGIMPL>>;

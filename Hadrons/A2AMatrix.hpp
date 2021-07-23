@@ -76,6 +76,12 @@ public:
     virtual ~A2AKernel(void) = default;
     virtual void operator()(A2AMatrixSet<T> &m, const Field *left, const Field *right,
                           const unsigned int orthogDim, double &time) = 0;
+    virtual void operator()(A2AMatrixSet<T> &m,
+                            int mu,
+                            const LatticeColourMatrix &Umu,
+                            const Field *left,
+                            const Field *right,
+                            const unsigned int orthogDim, double &time) = 0;
     virtual double flops(const unsigned int blockSizei, const unsigned int blockSizej) = 0;
     virtual double bytes(const unsigned int blockSizei, const unsigned int blockSizej) = 0;
 };
@@ -109,6 +115,8 @@ public:
                    const unsigned int i, const unsigned int j);
     template <template <class> class Vec, typename VecT>
     void load(Vec<VecT> &v, double *tRead = nullptr, GridBase *grid = nullptr);
+    template <template <class> class Vec, typename VecT>
+    void load(Vec<VecT> &v, GridCartesian *grid, double *tRead);
 private:
     std::string  filename_{""}, dataname_{""};
     unsigned int nt_{0}, ni_{0}, nj_{0};
@@ -140,6 +148,15 @@ public:
                               TimerArray *tArray = nullptr);
     // execution
     void execute(const std::vector<Field> &left, 
+                 const std::vector<Field> &right,
+                 A2AKernel<T, Field> &kernel,
+                 const FilenameFn &ionameFn,
+                 const FilenameFn &filenameFn,
+                 const MetadataFn &metadataFn);
+    // for Staggered Conserved Current
+    void execute(int mu,
+                 const LatticeColourMatrix Umu,
+                 const std::vector<Field> &left,
                  const std::vector<Field> &right,
                  A2AKernel<T, Field> &kernel,
                  const FilenameFn &ionameFn,
@@ -204,6 +221,56 @@ public:
         }
     }
 
+    // accTrMul(acc, a, b, eval): acc += tr(a*b) / eval / eval
+    template <typename C, typename MatLeft, typename MatRight, typename Eval>
+    static inline void accTrMul(C &acc,
+                                const MatLeft &a,
+                                const MatRight &b,
+                                const Eval &eval)
+    {
+        int vsize = a.cols();
+        
+        thread_for(r,vsize,
+                   {
+                       Eigen::VectorXcd tmpv(vsize);
+                       Eigen::VectorXcd avec(vsize);
+                       Eigen::VectorXcd bvec(vsize);
+                       C tmp;
+                       ComplexD reval = eval(r);
+
+                       avec = a.row(r);
+                       bvec = b.col(r);
+                       tmpv = avec.cwiseProduct(bvec.cwiseProduct(eval));
+                       tmp  = tmpv.sum()*reval;
+                       
+                       tmpv = b.row(r).conjugate();
+                       bvec = tmpv.cwiseProduct(eval);
+                       tmpv = avec.cwiseProduct(bvec);
+                       tmp += tmpv.sum()*reval;
+
+                       avec = a.col(r).conjugate();
+                       tmpv = avec.cwiseProduct(bvec);
+                       tmp += tmpv.sum()*reval;
+
+                       bvec = b.col(r);
+                       tmpv = avec.cwiseProduct(bvec.cwiseProduct(eval));
+                       tmp += tmpv.sum()*reval;
+                       
+                       thread_critical
+                       {
+                           acc += tmp;
+                       }
+                   });
+    }
+    
+    template <typename MatLeft, typename MatRight>
+    static inline double accTrMulCCFlops(const MatLeft &a, const MatRight &b)
+    {
+        double n = a.rows()*a.cols();
+        
+        return 36.*n;
+    }
+    
     template <typename MatLeft, typename MatRight>
     static inline double accTrMulFlops(const MatLeft &a, const MatRight &b)
     {
@@ -597,6 +664,84 @@ void A2AMatrixIo<T>::load(Vec<VecT> &v, double *tRead, GridBase *grid)
 #endif
 }
 
+template <typename T>
+template <template <class> class Vec, typename VecT>
+void A2AMatrixIo<T>::load(Vec<VecT> &v, GridCartesian *grid, double *tRead)
+{
+#ifdef HAVE_HDF5
+    Hdf5Reader           reader(filename_);
+    std::vector<hsize_t> hdim;
+    H5NS::DataSet        dataset;
+    H5NS::DataSpace      dataspace;
+    H5NS::CompType       datatype;
+    
+    push(reader, dataname_);
+    auto &group = reader.getGroup();
+    dataset     = group.openDataSet(HADRONS_A2AM_NAME);
+    datatype    = dataset.getCompType();
+    dataspace   = dataset.getSpace();
+    hdim.resize(dataspace.getSimpleExtentNdims());
+    dataspace.getSimpleExtentDims(hdim.data());
+    if ((nt_*ni_*nj_ != 0) and
+        ((hdim[0] != nt_ * grid->_processors[3]) or (hdim[1] != ni_) or (hdim[2] != nj_)))
+    {
+        HADRONS_ERROR(Size, "all-to-all matrix size mismatch (got "
+                      + std::to_string(hdim[0]) + "x" + std::to_string(hdim[1]) + "x"
+                      + std::to_string(hdim[2]) + ", expected "
+                      + std::to_string(nt_) + "x" + std::to_string(ni_) + "x"
+                      + std::to_string(nj_));
+    }
+    else if (ni_*nj_ == 0)
+    {
+        if (hdim[0] != nt_ * grid->_processors[3])
+        {
+            HADRONS_ERROR(Size, "all-to-all time size mismatch (got "
+                          + std::to_string(hdim[0]) + ", expected "
+                          + std::to_string(nt_ * grid->_processors[3]) + ")");
+        }
+        ni_ = hdim[1];
+        nj_ = hdim[2];
+    }
+    
+    A2AMatrix<T>         buf(ni_, nj_);
+    std::vector<hsize_t> count    = {1, static_cast<hsize_t>(ni_),
+        static_cast<hsize_t>(nj_)},
+    stride   = {1, 1, 1},
+    block    = {1, 1, 1},
+    memCount = {static_cast<hsize_t>(ni_),
+        static_cast<hsize_t>(nj_)};
+    H5NS::DataSpace      memspace(memCount.size(), memCount.data());
+    
+    std::cout << "Loading timeslice";
+    std::cout.flush();
+    *tRead = 0.;
+    int localNt = grid->LocalDimensions()[3];
+    int globalNt = grid->GlobalDimensions()[3];
+    int tshift = grid->_processor_coor[3] * localNt;
+    for (unsigned int tp1 = localNt; tp1 > 0; --tp1)
+    {
+        unsigned int         t      = tp1 - 1;
+        std::vector<hsize_t> offset = {static_cast<hsize_t>(t+tshift)%globalNt, 0, 0};
+        
+        if (t % 1 == 0)
+        {
+            std::cout << " " << t;
+            std::cout.flush();
+        }
+        dataspace.selectHyperslab(H5S_SELECT_SET, count.data(), offset.data(),
+                                  stride.data(), block.data());
+        if (tRead) *tRead -= usecond();
+        dataset.read(buf.data(), datatype, memspace, dataspace);
+        if (tRead) *tRead += usecond();
+        v[t] = buf.template cast<VecT>();
+        std::cout << " here4 "; std::cout.flush();
+    }
+    std::cout << std::endl;
+#else
+    HADRONS_ERROR(Implementation, "all-to-all matrix I/O needs HDF5 library");
+#endif
+}
+
 /******************************************************************************
  *               A2AMatrixBlockComputation template implementation            *
  ******************************************************************************/
@@ -750,6 +895,143 @@ void A2AMatrixBlockComputation<T, Field, MetadataType, TIo>
                      << blockSize/ioTime*1.0e6/1024/1024
                      << " MB/s)" << std::endl;
     }
+}
+
+// execution ///////////////////////////////////////////////////////////////////
+template <typename T, typename Field, typename MetadataType, typename TIo>
+void A2AMatrixBlockComputation<T, Field, MetadataType, TIo>
+::execute(int mu,
+          const LatticeColourMatrix Umu,
+          const std::vector<Field> &left,
+          const std::vector<Field> &right,
+          A2AKernel<T, Field> &kernel,
+          const FilenameFn &ionameFn,
+          const FilenameFn &filenameFn,
+          const MetadataFn &metadataFn)
+{
+    //////////////////////////////////////////////////////////////////////////
+    // i,j   is first  loop over blockSize_ factors
+    // ii,jj is second loop over cacheBlockSize_ factors for high perf contractions
+    // iii,jjj are loops within cacheBlock
+    // Total index is sum of these  i+ii+iii etc...
+    //////////////////////////////////////////////////////////////////////////
+    // only positive lambda vectors explicitly computed
+    int    N_i = 2*left.size();
+    int    N_j = 2*right.size();
+    double flops, bytes, t_kernel;
+    double nodes = grid_->NodeCount();
+    
+    int NBlock_i = N_i/blockSize_ + (((N_i % blockSize_) != 0) ? 1 : 0);
+    int NBlock_j = N_j/blockSize_ + (((N_j % blockSize_) != 0) ? 1 : 0);
+    
+    for(int i=0;i<N_i;i+=blockSize_)
+        for(int j=0;j<N_j;j+=blockSize_)
+        {
+            // Get the W and V vectors for this block^2 set of terms
+            int N_ii = MIN(N_i-i,blockSize_);
+            int N_jj = MIN(N_j-j,blockSize_);
+            A2AMatrixSet<TIo> mBlock(mBuf_.data(), next_, nstr_, nt_, N_ii, N_jj);
+            
+            LOG(Message) << "All-to-all matrix block "
+            << j/blockSize_ + NBlock_j*i/blockSize_ + 1
+            << "/" << NBlock_i*NBlock_j << " [" << i <<" .. "
+            << i+N_ii-1 << ", " << j <<" .. " << j+N_jj-1 << "]"
+            << std::endl;
+            // Series of cache blocked chunks of the contractions within this block
+            flops    = 0.0;
+            bytes    = 0.0;
+            t_kernel = 0.0;
+            for(int ii=0;ii<N_ii;ii+=cacheBlockSize_)
+                for(int jj=0;jj<N_jj;jj+=cacheBlockSize_)
+                {
+                    double t;
+                    int N_iii = MIN(N_ii-ii,cacheBlockSize_);
+                    int N_jjj = MIN(N_jj-jj,cacheBlockSize_);
+                    A2AMatrixSet<T> mCacheBlock(mCache_.data(), next_, nstr_, nt_, N_iii, N_jjj);
+                    
+                    START_TIMER("kernel");
+                    // only have the positve vectors
+                    kernel(mCacheBlock, mu, Umu, &left[(i+ii)/2], &right[(j+jj)/2], orthogDim_, t);
+                    STOP_TIMER("kernel");
+                    t_kernel += t;
+                    flops    += kernel.flops(N_iii, N_jjj);
+                    bytes    += kernel.bytes(N_iii, N_jjj);
+                    
+                    START_TIMER("cache copy");
+                    thread_for_collapse( 5,e,next_,{
+                        for(int s =0;s< nstr_;s++)
+                            for(int t =0;t< nt_;t++)
+                                for(int iii=0;iii< N_iii;iii++)
+                                    for(int jjj=0;jjj< N_jjj;jjj++)
+                                    {
+                                        mBlock(e,s,t,ii+iii,jj+jjj) = mCacheBlock(e,s,t,iii,jjj);
+                                    }
+                    });
+                    STOP_TIMER("cache copy");
+                }
+            
+            // perf
+            LOG(Message) << "Kernel perf " << flops/t_kernel/1.0e3/nodes
+            << " Gflop/s/node " << std::endl;
+            LOG(Message) << "Kernel perf " << bytes/t_kernel*1.0e6/1024/1024/1024/nodes
+            << " GB/s/node "  << std::endl;
+            
+            // IO
+            double       blockSize, ioTime;
+            unsigned int myRank = grid_->ThisRank(), nRank  = grid_->RankCount();
+            
+            LOG(Message) << "Writing block to disk" << std::endl;
+            ioTime = -GET_TIMER("IO: write block");
+            START_TIMER("IO: total");
+            makeFileDir(filenameFn(0, 0), grid_);
+#ifdef HADRONS_A2AM_PARALLEL_IO
+            grid_->Barrier();
+            // make task list for current node
+            nodeIo_.clear();
+            for(int f = myRank; f < next_*nstr_; f += nRank)
+            {
+                IoHelper h;
+                
+                h.i  = i;
+                h.j  = j;
+                h.e  = f/nstr_;
+                h.s  = f % nstr_;
+                h.io = A2AMatrixIo<TIo>(filenameFn(h.e, h.s),
+                                        ionameFn(h.e, h.s), nt_, N_i, N_j);
+                h.md = metadataFn(h.e, h.s);
+                nodeIo_.push_back(h);
+            }
+            // parallel IO
+            for (auto &h: nodeIo_)
+            {
+                saveBlock(mBlock, h);
+            }
+            grid_->Barrier();
+#else
+            // serial IO, for testing purposes only
+            for(int e = 0; e < next_; e++)
+                for(int s = 0; s < nstr_; s++)
+                {
+                    IoHelper h;
+                    
+                    h.i  = i;
+                    h.j  = j;
+                    h.e  = e;
+                    h.s  = s;
+                    h.io = A2AMatrixIo<TIo>(filenameFn(h.e, h.s),
+                                            ionameFn(h.e, h.s), nt_, N_i, N_j);
+                    h.md = metadataFn(h.e, h.s);
+                    saveBlock(mfBlock, h);
+                }
+#endif
+            STOP_TIMER("IO: total");
+            blockSize  = static_cast<double>(next_*nstr_*nt_*N_ii*N_jj*sizeof(TIo));
+            ioTime    += GET_TIMER("IO: write block");
+            LOG(Message) << "HDF5 IO done " << sizeString(blockSize) << " in "
+            << ioTime  << " us ("
+            << blockSize/ioTime*1.0e6/1024/1024
+            << " MB/s)" << std::endl;
+        }
 }
 
 // I/O handler /////////////////////////////////////////////////////////////////

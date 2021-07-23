@@ -47,14 +47,15 @@ BEGIN_MODULE_NAMESPACE(MSolver)
 class A2AVectorsPar: Serializable
 {
 public:
-  GRID_SERIALIZABLE_CLASS_MEMBERS(A2AVectorsPar,
-                                  std::string, noise,
-                                  std::string, action,
-                                  std::string, eigenPack,
-                                  double, mass,
-                                  std::string, solver,
-                                  std::string, output,
-                                  bool,        multiFile);
+    GRID_SERIALIZABLE_CLASS_MEMBERS(A2AVectorsPar,
+                                    std::string, noise,
+                                    std::string, action,
+                                    std::string, eigenPack,
+                                    std::string, solver,
+                                    std::string, output,
+                                    bool, doubleMemory,
+                                    double, mass,
+                                    bool,        multiFile);
 };
 
 template <typename FImpl, typename Pack>
@@ -465,6 +466,166 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
     //printMem("End StagA2AVectors execute() ", env().getGrid()->ThisRank());
 }
 
+// Don't divide v vecs by eval. for use with cons. current meson fields.
+
+template <typename FImpl, typename Pack>
+class TStagNoEvalA2AVectors : public Module<A2AVectorsPar>
+{
+public:
+    FERM_TYPE_ALIASES(FImpl,);
+    SOLVER_TYPE_ALIASES(FImpl,);
+    typedef A2AVectorsSchurStaggeredNoEval<FImpl> A2A;
+public:
+    // constructor
+    TStagNoEvalA2AVectors(const std::string name);
+    // destructor
+    virtual ~TStagNoEvalA2AVectors(void) {};
+    // dependency relation
+    virtual std::vector<std::string> getInput(void);
+    virtual std::vector<std::string> getOutput(void);
+    // setup
+    virtual void setup(void);
+    // execution
+    virtual void execute(void);
+private:
+    std::string  solverName_;
+    unsigned int Nl_{0};
+};
+
+MODULE_REGISTER_TMP(StagNoEvalA2AVectors,
+                    ARG(TStagNoEvalA2AVectors<STAGIMPL, BaseFermionEigenPack<STAGIMPL>>),
+                    MSolver);
+
+/******************************************************************************
+ *                       TStagNoEvalA2AVectors implementation                           *
+ ******************************************************************************/
+// constructor /////////////////////////////////////////////////////////////////
+template <typename FImpl, typename Pack>
+TStagNoEvalA2AVectors<FImpl, Pack>::TStagNoEvalA2AVectors(const std::string name)
+: Module<A2AVectorsPar>(name)
+{}
+
+// dependencies/products ///////////////////////////////////////////////////////
+template <typename FImpl, typename Pack>
+std::vector<std::string> TStagNoEvalA2AVectors<FImpl, Pack>::getInput(void)
+{
+    std::string              sub_string;
+    std::vector<std::string> in;
+    
+    in.push_back(par().eigenPack);
+    sub_string = (!par().eigenPack.empty()) ? "_subtract" : "";
+    in.push_back(par().action);
+    //in.push_back(par().vname);
+    
+    return in;
+}
+
+template <typename FImpl, typename Pack>
+std::vector<std::string> TStagNoEvalA2AVectors<FImpl, Pack>::getOutput(void)
+{
+    
+    std::vector<std::string> out = {getName()};
+    
+    return out;
+}
+
+// setup ///////////////////////////////////////////////////////////////////////
+template <typename FImpl, typename Pack>
+void TStagNoEvalA2AVectors<FImpl, Pack>::setup(void)
+{
+    bool        hasLowModes = (!par().eigenPack.empty());
+    std::string sub_string  = (hasLowModes) ? "_subtract" : "";
+    auto        &action     = envGet(FMat, par().action);
+    int         Ls          = env().getObjectLs(par().action);
+    
+    if (Ls > 1)
+    {
+        envTmpLat(FermionField, "f5", Ls);
+    }
+    envTmp(A2A, "a2a", 1, action);
+}
+
+// execution ///////////////////////////////////////////////////////////////////
+template <typename FImpl, typename Pack>
+void TStagNoEvalA2AVectors<FImpl, Pack>::execute(void)
+{
+    //printMem("Begin StagNoEvalA2AVectors execute() ", env().getGrid()->ThisRank());
+    std::string sub_string = (Nl_ > 0) ? "_subtract" : "";
+    auto        &action    = envGet(FMat, par().action);
+    auto &epack  = envGet(Pack, par().eigenPack);
+    Nl_ = epack.evec.size();
+    std::vector<FermionField> v;
+    if(!par().doubleMemory) v.resize(Nl_, envGetGrid(FermionField));
+    int         Ls         = env().getObjectLs(par().action);
+    double      mass       = par().mass;
+    
+    envGetTmp(A2A, a2a);
+    
+    LOG(Message) << "Computing all-to-all vectors "
+    << " using eigenpack '" << par().eigenPack << "' ("
+    << Nl_ << " low modes) '" << std::endl;
+
+    //save for later
+    std::vector<complex<double>> evalM(2*Nl_);
+    
+    // Low modes only, v(=w) vecs only
+    // evecs start at index = start
+    // index v vec from 0
+    // if doubleMemory construct Even and Odd site (full) evecs
+    // and write into evec. This is for meson field calc which computes
+    // minus lambda contribution from plus
+    
+    FermionField temp(env().getGrid());
+    
+    for (unsigned int il = 0; il < Nl_; il++)
+    {
+        
+        // eval of unpreconditioned Dirac op
+        std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
+        
+        startTimer("V low mode");
+        LOG(Message) << "V vector i = " << il << " (low mode)" << std::endl;
+        if (Ls == 1)
+        {
+            if(par().doubleMemory){
+                // construct full eo evec
+                a2a.makeLowModeV(temp, epack.evec[il], eval);
+                epack.evec[il]=temp;
+            }else{
+                a2a.makeLowModeV(v[il], epack.evec[il], eval);
+            }
+            evalM[2*il] = eval;
+            evalM[2*il+1] = conjugate(eval);
+        }
+        else
+        {
+            assert(0);
+        }
+        stopTimer("V low mode");
+    }
+    
+    // I/O if necessary
+    if (!par().output.empty())
+    {
+        std::string dir = dirname(par().output);
+        int status = mkdir(dir);
+        if (status)
+        {
+            HADRONS_ERROR(Io, "cannot create directory '" + dir
+                          + "' ( " + std::strerror(errno) + ")");
+        }
+        if ( env().getGrid()->IsBoss() ) {
+            
+            std::string eval_filename = A2AVectorsIo::evalFilename(par().output,vm().getTrajectory());
+            A2AVectorsIo::initEvalFile(eval_filename,
+                                       evalM.size());// total size
+            A2AVectorsIo::saveEvalBlock(eval_filename,
+                                        evalM.data(),
+                                        0,// start of chunk
+                                        2*Nl_);// size of chunk saved
+        }
+    }
+}
 END_MODULE_NAMESPACE
 
 END_HADRONS_NAMESPACE

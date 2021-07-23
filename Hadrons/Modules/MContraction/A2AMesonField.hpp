@@ -87,6 +87,17 @@ public:
     {
         A2Autils<FImpl>::MesonField(m, left, right, gamma_, mom_, orthogDim, &t);
     }
+    void operator()(A2AMatrixSet<T> &m,
+                    int mu,
+                    const LatticeColourMatrix &Umu,
+                    const FermionField *left,
+                    const FermionField *right,
+                    const unsigned int orthogDim,
+                    double &t)
+    {
+        //unimplemented (for Staggered conserved current)
+        assert(0);
+    }
 
     virtual double flops(const unsigned int blockSizei, const unsigned int blockSizej)
     {

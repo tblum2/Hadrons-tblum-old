@@ -19,7 +19,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Hadrons.  If not, see <http://www.gnu.org/licenses/>.
  *
- * See the full license in the file "LICENSE" in the top level distribution 
+ * See the full license in the file "LICENSE" in the top level distribution
  * directory.
  */
 
@@ -35,7 +35,7 @@ BEGIN_HADRONS_NAMESPACE
 
 // Lanczos type
 #ifndef HADRONS_DEFAULT_LANCZOS_NBASIS
-#define HADRONS_DEFAULT_LANCZOS_NBASIS 60
+#define HADRONS_DEFAULT_LANCZOS_NBASIS 384
 #endif
 
 #define HADRONS_DUMP_EP_METADATA(record) \
@@ -118,13 +118,21 @@ namespace EigenPackIo
         if (multiFile)
         {
             std::string fullFilename;
-
             for(int k = 0; k < size; ++k) 
             {
                 fullFilename = filename + "/v" + std::to_string(k) + ".bin";
                 binReader.open(fullFilename);
                 readHeader(record, binReader);
-                readElement(evec[k], eval[k], k, binReader, ioBuf.get());
+                if(gridIo != nullptr){
+                  T temp(gridIo);// saving memomry since grid is full lattice vector
+                                 // need to use rb grid to read
+                  readElement(temp, eval[k], k, binReader, ioBuf.get());
+                  temp.Checkerboard() = Odd;
+                  setCheckerboard(evec[k],temp);
+                }else{
+                  readElement(evec[k], eval[k], k, binReader, ioBuf.get());
+                }
+                evec.shrink_to_fit();
                 binReader.close();
             }
         }
@@ -134,8 +142,17 @@ namespace EigenPackIo
             readHeader(record, binReader);
             for(int k = 0; k < size; ++k) 
             {
-                readElement(evec[k], eval[k], k, binReader, ioBuf.get());
+                if(gridIo != nullptr){
+                  T temp(gridIo);// saving memomry since grid is full lattice vector
+                                 // need to use rb grid to read
+                  readElement(temp, eval[k], k, binReader, ioBuf.get());
+                  temp.Checkerboard() = Odd;
+                  setCheckerboard(evec[k],temp);
+                }else{
+                    readElement(evec[k], eval[k], k, binReader, ioBuf.get());
+                }
             }
+            evec.shrink_to_fit();
             binReader.close();
         }
     }
@@ -238,6 +255,10 @@ public:
     {
         resize(size, grid);
     }
+    BaseEigenPack(const size_t size, GridBase *grid, GridBase *gridIo)
+    {
+        resize(size, gridIo);
+    }
     virtual ~BaseEigenPack(void) = default;
     void resize(const size_t size, GridBase *grid)
     {
@@ -258,6 +279,7 @@ public:
 
     EigenPack(const size_t size, GridBase *grid, GridBase *gridIo = nullptr)
     : BaseEigenPack<F>(size, grid)
+    //: BaseEigenPack<F>(size, gridIo)//doubling size of evec storage
     {
         if (typeHash<F>() != typeHash<FIo>())
         {
