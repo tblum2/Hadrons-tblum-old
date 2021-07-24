@@ -501,7 +501,7 @@ void A2AMatrixIo<T>::initFile(const MetadataType &d, const unsigned int chunkSiz
     std::vector<hsize_t>    dim = {static_cast<hsize_t>(nt_), 
                                    static_cast<hsize_t>(ni_), 
                                    static_cast<hsize_t>(nj_)},
-                            chunk = {static_cast<hsize_t>(nt_), 
+                            chunk = {static_cast<hsize_t>(1), 
                                      static_cast<hsize_t>(chunkSize), 
                                      static_cast<hsize_t>(chunkSize)};
     H5NS::DataSpace         dataspace(dim.size(), dim.data());
