@@ -297,12 +297,7 @@ std::vector<std::string> TStagA2AVectors<FImpl, Pack>::getInput(void)
     std::string              sub_string;
     std::vector<std::string> in;
     
-    if (!par().eigenPack.empty())
-    {
-        in.push_back(par().eigenPack);
-        sub_string = (!par().eigenPack.empty()) ? "_subtract" : "";
-    }
-    in.push_back(par().solver + sub_string);
+    in.push_back(par().solver);
     in.push_back(par().noise);
     
     return in;
@@ -324,7 +319,7 @@ void TStagA2AVectors<FImpl, Pack>::setup(void)
     std::string sub_string  = (hasLowModes) ? "_subtract" : "";
     auto        &noise      = envGet(ColorDiagonalNoise<FImpl>, par().noise);
     auto        &action     = envGet(FMat, par().action);
-    auto        &solver     = envGet(Solver, par().solver + sub_string);
+    auto        &solver     = envGet(Solver, par().solver);
     int         Ls          = env().getObjectLs(par().action);
     
     
@@ -342,17 +337,14 @@ void TStagA2AVectors<FImpl, Pack>::setup(void)
         envTmpLat(FermionField, "f5", Ls);
     }
     envTmp(A2A, "a2a", 1, action, solver);
-    //printMem("StagA2AVectors setup() ", env().getGrid()->ThisRank());
 }
 
 // execution ///////////////////////////////////////////////////////////////////
 template <typename FImpl, typename Pack>
 void TStagA2AVectors<FImpl, Pack>::execute(void)
 {
-    //printMem("Begin StagA2AVectors execute() ", env().getGrid()->ThisRank());
-    std::string sub_string = (Nl_ > 0) ? "_subtract" : "";
     auto        &action    = envGet(FMat, par().action);
-    auto        &solver    = envGet(Solver, par().solver + sub_string);
+    auto        &solver    = envGet(Solver, par().solver);
     auto        &noise     = envGet(ColorDiagonalNoise<FImpl>, par().noise);
     auto        &v         = envGet(std::vector<FermionField>, getName() + "_v");
     auto        &w         = envGet(std::vector<FermionField>, getName() + "_w");
@@ -360,8 +352,6 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
     double      mass       = par().mass;
     
     envGetTmp(A2A, a2a);
-    
-    //GridBase *grid = v[0].Grid();
     
     if (Nl_ > 0)
     {
@@ -378,10 +368,9 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
         << " noise vectors)" << std::endl;
     }
     // Low modes
+    auto &epack  = envGet(Pack, par().eigenPack);
     for (unsigned int il = 0; il < Nl_; il++)
     {
-        auto &epack  = envGet(Pack, par().eigenPack);
-        
         // eval of unpreconditioned Dirac op
         std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
         
@@ -421,6 +410,9 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
     
     // High modes
 #if 1
+    
+    FermionField sub(env().getGrid());
+    
     for (unsigned int ih = 0; ih < noise.fermSize(); ih++)
     {
         startTimer("V high mode");
@@ -430,12 +422,26 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
         if (Ls == 1)
         {
             a2a.makeHighModeV(v[2*Nl_ + ih], noise.getFerm(ih));
+            // subtract the low modes
+            sub = Zero();
+            for (int i=0;i<2*Nl_;i++) {
+              const FermionField& tmp = v[i];
+              // eval of unpreconditioned Dirac op
+              std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
+              eval = i%2 ? eval : conjugate(eval);
+              // * not / by eval since v already has 1/eval
+              axpy(sub,TensorRemove(innerProduct(tmp,noise.getFerm(ih))) * eval,tmp,sub);
+            }
+            v[2*Nl_ + ih] -= sub;
         }
         else
         {
             envGetTmp(FermionField, f5);
             a2a.makeHighModeV5D(v[2*Nl_ + ih], f5, noise.getFerm(ih));
         }
+        std::cout << "v high " << ih << std::endl;
+        std::cout << v[2*Nl_+ih] << std::endl;
+        
         stopTimer("V high mode");
         startTimer("W high mode");
         LOG(Message) << "W vector i = " << 2*Nl_ + ih
