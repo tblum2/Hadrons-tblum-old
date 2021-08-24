@@ -243,8 +243,8 @@ void Environment::createGrid(const unsigned int Ls)
     {
         grid4d_[{hash, 1}].reset(
             SpaceTimeGrid::makeFourDimGrid(getDim(), 
-                                           //GridDefaultSimd(getNd(), VType::Nsimd()),
-                                           MyDefaultSimd(getNd(), VType::Nsimd()),
+                                           GridDefaultSimd(getNd(), VType::Nsimd()),
+                                           //MyDefaultSimd(getNd(), VType::Nsimd()),
                                            GridDefaultMpi()));
         HADRONS_DUMP_GRID(grid4d_[{hash, 1}].get());
         gridRb4d_[{hash, 1}].reset(
