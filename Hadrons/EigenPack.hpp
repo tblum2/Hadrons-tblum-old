@@ -120,7 +120,13 @@ namespace EigenPackIo
             std::string fullFilename;
             for(int k = 0; k < size; ++k) 
             {
-                fullFilename = filename + "/v" + std::to_string(k) + ".bin";
+                if(filename.find("shuffle")!=std::string::npos){
+                    // luchang's shuffled field writer
+                    fullFilename = filename + "/meta" + std::to_string(k) + ".txt";
+                }else{
+                    // usual grid io
+                    fullFilename = filename + "/v" + std::to_string(k) + ".bin";
+                }
                 binReader.open(fullFilename);
                 readHeader(record, binReader);
                 if(gridIo != nullptr){
@@ -217,8 +223,13 @@ namespace EigenPackIo
 
             for(int k = 0; k < size; ++k) 
             {
-                fullFilename = filename + "/v" + std::to_string(k) + ".bin";
-
+                if(filename.find("shuffle")!=std::string::npos){
+                    // luchang's shuffled field writer
+                    fullFilename = filename + "/meta" + std::to_string(k) + ".txt";
+                }else{
+                    // usual grid io
+                    fullFilename = filename + "/v" + std::to_string(k) + ".bin";
+                }
                 makeFileDir(fullFilename, grid);
                 binWriter.open(fullFilename);
                 writeHeader(binWriter, record);
