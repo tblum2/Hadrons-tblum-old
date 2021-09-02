@@ -259,7 +259,7 @@ class TStagA2AVectors : public Module<A2AVectorsPar>
 public:
     FERM_TYPE_ALIASES(FImpl,);
     SOLVER_TYPE_ALIASES(FImpl,);
-    typedef HADRONS_DEFAULT_SCHUR_A2A<FImpl> A2A;
+    typedef A2AVectorsSchurStaggered<FImpl> A2A;
 public:
     // constructor
     TStagA2AVectors(const std::string name);
