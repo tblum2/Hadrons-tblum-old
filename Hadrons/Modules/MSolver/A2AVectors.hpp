@@ -297,6 +297,11 @@ std::vector<std::string> TStagA2AVectors<FImpl, Pack>::getInput(void)
     std::string              sub_string;
     std::vector<std::string> in;
     
+    if (!par().eigenPack.empty())
+    {
+        in.push_back(par().eigenPack);
+        sub_string = (!par().eigenPack.empty()) ? "_subtract" : "";
+    }
     in.push_back(par().solver);
     in.push_back(par().noise);
     
