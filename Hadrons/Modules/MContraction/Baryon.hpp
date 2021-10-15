@@ -223,6 +223,15 @@ void TBaryon<FImpl>::setup(void)
 template <typename FImpl>
 void TBaryon<FImpl>::execute(void)
 {
+    //FIX Baryon utils!
+#ifdef GRID_OMP
+    std::cout << "setting "<< omp_get_num_threads() << " threads to 1\n" << std::endl;
+    int save_num_threads=omp_get_num_threads();
+    omp_set_num_threads(1);
+#else
+    std::cout << "Baryons: Single-threaded already\n" << std::endl;
+#endif
+    
     // Check shuffle is a permutation of "123"
     assert(par().shuffle.size()==3 && "shuffle parameter must be 3 characters long");
     std::string shuffle_tmp = par().shuffle;
@@ -495,6 +504,12 @@ void TBaryon<FImpl>::execute(void)
         saveResult(par().output, "baryon", result);
     else 
         saveResult(par().output + "_Matrix", "baryonMat", resultMat);
+    
+    //FIX baryon utils!
+#ifdef GRID_OMP
+    omp_set_num_threads(save_num_threads);
+    std::cout << "set num threads back to "<< omp_get_num_threads() << std::endl;
+#endif
 
 }
 #endif
