@@ -417,6 +417,7 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
 #if 1
     
     FermionField sub(env().getGrid());
+    FermionField noise_ih(env().getGrid());
     
     for (unsigned int ih = 0; ih < noise.fermSize(); ih++)
     {
@@ -429,13 +430,15 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
             a2a.makeHighModeV(v[2*Nl_ + ih], noise.getFerm(ih));
             // subtract the low modes
             sub = Zero();
+            noise_ih = noise.getFerm(ih);
             for (int i=0;i<2*Nl_;i++) {
               const FermionField& tmp = v[i];
               // eval of unpreconditioned Dirac op
               std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
               eval = i%2 ? eval : conjugate(eval);
-              // * not / by eval since v already has 1/eval
-              axpy(sub,TensorRemove(innerProduct(tmp,noise.getFerm(ih))) * eval,tmp,sub);
+              // need to subtract |l><l|/lambda_l |src>, so
+              // mult, do not / by eval since v already has 1/eval
+              axpy(sub,TensorRemove(innerProduct(tmp,noise_ih)) * eval,tmp,sub);
             }
             v[2*Nl_ + ih] -= sub;
         }
