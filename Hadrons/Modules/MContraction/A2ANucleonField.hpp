@@ -2,9 +2,9 @@
 
 Grid physics library, www.github.com/paboyle/Grid 
 
-Source file: Hadrons/Modules/MContraction/StagA2AMesonField.hpp
+Source file: Hadrons/Modules/MContraction/A2ANucleonField.hpp
 
-Copyright (C) 2015-2019
+Copyright (C) 2015-2018
 
 Author: Antonin Portelli <antonin.portelli@me.com>
 Author: Peter Boyle <paboyle@ph.ed.ac.uk>
@@ -27,51 +27,53 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 See the full license in the file "LICENSE" in the top level distribution directory
 *************************************************************************************/
 /*  END LEGAL */
-#ifndef Hadrons_MContraction_StagA2AMesonField_hpp_
-#define Hadrons_MContraction_StagA2AMesonField_hpp_
+#ifndef Hadrons_MContraction_A2ANucleonField_hpp_
+#define Hadrons_MContraction_A2ANucleonField_hpp_
 
 #include <Hadrons/Global.hpp>
 #include <Hadrons/Module.hpp>
 #include <Hadrons/ModuleFactory.hpp>
-#include <Hadrons/A2AMatrix.hpp>
+// MCA - change this to A2AMatrixNucleon.hpp?
+#include <Hadrons/A2AMatrixNucleon.hpp>
 
 BEGIN_HADRONS_NAMESPACE
 
 /******************************************************************************
- *                     All-to-all meson field creation                        *
+ *                     All-to-all nucleon field creation                      *
  ******************************************************************************/
 BEGIN_MODULE_NAMESPACE(MContraction)
 
-class StagA2AMesonFieldPar: Serializable
+class A2ANucleonFieldPar: Serializable
 {
 public:
-    GRID_SERIALIZABLE_CLASS_MEMBERS(StagA2AMesonFieldPar,
+    GRID_SERIALIZABLE_CLASS_MEMBERS(A2ANucleonFieldPar,
                                     int, cacheBlock,
                                     int, block,
                                     std::string, left,
                                     std::string, right,
+                                    std::string, q3,
                                     std::string, output,
-                                    std::string, gammas,
+                                    std::string, gammas, // may not need this for 2pt
                                     std::vector<std::string>, mom);
 };
 
-class StagA2AMesonFieldMetadata: Serializable
+class A2ANucleonFieldMetadata: Serializable
 {
 public:
-    GRID_SERIALIZABLE_CLASS_MEMBERS(StagA2AMesonFieldMetadata,
-                                    std::vector<RealF>, momentum,
-                                    Gamma::Algebra, gamma);
+    GRID_SERIALIZABLE_CLASS_MEMBERS(A2ANucleonFieldMetadata,
+                                    std::vector<RealF>, momentum
+                                    /*Gamma::Algebra, gamma*/);
 };
 
 template <typename T, typename FImpl>
-class StagMesonFieldKernel: public A2AKernel<T, typename FImpl::FermionField>
+class NucleonFieldKernel: public A2AKernelNucleon<T, typename FImpl::FermionField>
 {
 public:
     typedef typename FImpl::FermionField FermionField;
 public:
-    StagMesonFieldKernel(const std::vector<Gamma::Algebra> &gamma,
-                         const std::vector<LatticeComplex> &mom,
-                         GridBase *grid)
+    NucleonFieldKernel(const std::vector<Gamma::Algebra> &gamma,
+                     const std::vector<LatticeComplex> &mom,
+                     GridBase *grid)
     : gamma_(gamma), mom_(mom), grid_(grid)
     {
         vol_ = 1.;
@@ -81,52 +83,26 @@ public:
         }
     }
 
-    virtual ~StagMesonFieldKernel(void) = default;
-    
-    void operator()(A2AMatrixSet<T> &m,
-                            const FermionField *left,
+    virtual ~NucleonFieldKernel(void) = default;
+    // MCA - adjust this for nucleon? [A2AMatrixNucleonSet]
+    virtual void operator()(A2AMatrixSetNuc<T> &m, const FermionField *left, 
                             const FermionField *right,
-                            const unsigned int orthogDim,
-                            double &t)
+                            const FermionField *q3,
+                            const unsigned int orthogDim, double &t)
     {
-        A2Autils<FImpl>::StagMesonField(m, left, right, gamma_, mom_, orthogDim, &t);
-    }
-    void operator()(A2AMatrixSet<T> &m,
-                    int mu,
-                    const LatticeColourMatrix &Umu,
-                    const FermionField *left,
-                    const FermionField *right,
-                    const unsigned int orthogDim,
-                    double &t)
-    {
-        //unimplemented
-        assert(0);
-    }
-    void operator()(A2AMatrixSet<T> &m,
-                    int mu,
-                    const LatticeColourMatrix &Umu,
-                    const LatticeComplex &srcPtGrid,
-                    const FermionField *left,
-                    const FermionField *right,
-                    const unsigned int orthogDim,
-                    double &t)
-    {
-        //unimplemented
-        assert(0);
-    }
-    
-    virtual double flops(const unsigned int blockSizei, const unsigned int blockSizej)
-    {
-        // needs to be updated for staggered
-        return vol_*(2*8.0+6.0+8.0*mom_.size())*blockSizei*blockSizej*gamma_.size();
-        //return vol_*(22.0+6.0*mom_.size())*blockSizei*blockSizej;
+		// MCA - adjust this for nucleon [A2Autils<FImpl>::NucleonField(m, left, right, q3, gamma_, mom_, orthogDim, &t);]
+        A2Autils<FImpl>::NucleonField(m, left, right, q3, gamma_, mom_, orthogDim, &t);
     }
 
-    virtual double bytes(const unsigned int blockSizei, const unsigned int blockSizej)
+    virtual double flops(const unsigned int blockSizei, const unsigned int blockSizej, const unsigned int blockSizek)
     {
-        // 3.0 ? for colors
-        return vol_*(3.0*sizeof(T))*blockSizei*blockSizej
-               +  vol_*(2.0*sizeof(T)*mom_.size())*blockSizei*blockSizej*gamma_.size();
+        return vol_*(2*8.0+6.0+8.0*mom_.size())*blockSizei*blockSizej*blockSizek*gamma_.size();
+    }
+
+    virtual double bytes(const unsigned int blockSizei, const unsigned int blockSizej, const unsigned int blockSizek)
+    {
+        return vol_*(12.0*sizeof(T))*blockSizei*blockSizej*blockSizek
+               +  vol_*(2.0*sizeof(T)*mom_.size())*blockSizei*blockSizej*blockSizek*gamma_.size();
     }
 private:
     const std::vector<Gamma::Algebra> &gamma_;
@@ -136,20 +112,21 @@ private:
 };
 
 template <typename FImpl>
-class TStagA2AMesonField : public Module<StagA2AMesonFieldPar>
+class TA2ANucleonField : public Module<A2ANucleonFieldPar>
 {
 public:
     FERM_TYPE_ALIASES(FImpl,);
-    typedef A2AMatrixBlockComputation<Complex, 
+    // MCA - UPDATE THIS FOR NUCLEON
+    typedef A2AMatrixNucleonBlockComputation<Complex, 
                                       FermionField, 
-                                      StagA2AMesonFieldMetadata,
-                                      HADRONS_A2AM_IO_TYPE> Computation;
-    typedef StagMesonFieldKernel<Complex, FImpl> Kernel;
+                                      A2ANucleonFieldMetadata, 
+                                      HADRONS_A2AN_IO_TYPE> Computation;
+    typedef NucleonFieldKernel<Complex, FImpl> Kernel;
 public:
     // constructor
-    TStagA2AMesonField(const std::string name);
+    TA2ANucleonField(const std::string name);
     // destructor
-    virtual ~TStagA2AMesonField(void){};
+    virtual ~TA2ANucleonField(void){};
     // dependency relation
     virtual std::vector<std::string> getInput(void);
     virtual std::vector<std::string> getOutput(void);
@@ -164,30 +141,30 @@ private:
     std::vector<std::vector<Real>>     mom_;
 };
 
-MODULE_REGISTER(StagA2AMesonField, ARG(TStagA2AMesonField<STAGIMPL>), MContraction);
+MODULE_REGISTER(A2ANucleonField, ARG(TA2ANucleonField<FIMPL>), MContraction);
 
 /******************************************************************************
-*                  TStagA2AMesonField implementation                             *
+*                  TA2ANucleonField implementation                            *
 ******************************************************************************/
 // constructor /////////////////////////////////////////////////////////////////
 template <typename FImpl>
-TStagA2AMesonField<FImpl>::TStagA2AMesonField(const std::string name)
-: Module<StagA2AMesonFieldPar>(name)
+TA2ANucleonField<FImpl>::TA2ANucleonField(const std::string name)
+: Module<A2ANucleonFieldPar>(name)
 , momphName_(name + "_momph")
 {
 }
 
 // dependencies/products ///////////////////////////////////////////////////////
 template <typename FImpl>
-std::vector<std::string> TStagA2AMesonField<FImpl>::getInput(void)
+std::vector<std::string> TA2ANucleonField<FImpl>::getInput(void)
 {
-    std::vector<std::string> in = {par().left, par().right};
+    std::vector<std::string> in = {par().left, par().right, par().q3};
 
     return in;
 }
 
 template <typename FImpl>
-std::vector<std::string> TStagA2AMesonField<FImpl>::getOutput(void)
+std::vector<std::string> TA2ANucleonField<FImpl>::getOutput(void)
 {
     std::vector<std::string> out = {};
 
@@ -196,7 +173,7 @@ std::vector<std::string> TStagA2AMesonField<FImpl>::getOutput(void)
 
 // setup ///////////////////////////////////////////////////////////////////////
 template <typename FImpl>
-void TStagA2AMesonField<FImpl>::setup(void)
+void TA2ANucleonField<FImpl>::setup(void)
 {
     gamma_.clear();
     mom_.clear();
@@ -241,39 +218,44 @@ void TStagA2AMesonField<FImpl>::setup(void)
              par().mom.size(), envGetGrid(ComplexField));
     envTmpLat(ComplexField, "coor");
     envTmp(Computation, "computation", 1, envGetGrid(FermionField), 
-           env().getNd() - 1, mom_.size(), gamma_.size(), par().block, 
+           env().getNd() - 1, mom_.size(), Ns, par().block, 
            par().cacheBlock, this);
 }
 
 // execution ///////////////////////////////////////////////////////////////////
 template <typename FImpl>
-void TStagA2AMesonField<FImpl>::execute(void)
+void TA2ANucleonField<FImpl>::execute(void)
 {
     auto &left  = envGet(std::vector<FermionField>, par().left);
     auto &right = envGet(std::vector<FermionField>, par().right);
+    auto &q3    = envGet(std::vector<FermionField>, par().q3);
 
     int nt         = env().getDim().back();
     int N_i        = left.size();
     int N_j        = right.size();
-    int ngamma     = gamma_.size();
+    int N_k        = q3.size();
+    int ngamma     = Ns;
     int nmom       = mom_.size();
     int block      = par().block;
     int cacheBlock = par().cacheBlock;
 
-    LOG(Message) << "Computing all-to-all meson fields" << std::endl;
-    LOG(Message) << "Left: '" << par().left << "' Right: '" << par().right << "'" << std::endl;
+    LOG(Message) << "Computing all-to-all nucleon fields" << std::endl;
+    LOG(Message) << "Left: '" << par().left << "' Right: '" << par().right << "' Q3: '" << par().q3 << "'" << std::endl;
     LOG(Message) << "Momenta:" << std::endl;
     for (auto &p: mom_)
     {
         LOG(Message) << "  " << p << std::endl;
     }
+    // MCA - Disabling this for nucleon
+    /*
     LOG(Message) << "Spin bilinears:" << std::endl;
     for (auto &g: gamma_)
     {
         LOG(Message) << "  " << g << std::endl;
     }
-    LOG(Message) << "Meson field size: " << nt << "*" << N_i << "*" << N_j 
-                 << " (filesize " << sizeString(nt*N_i*N_j*sizeof(HADRONS_A2AM_IO_TYPE)) 
+    */
+    LOG(Message) << "Nucleon field size: " << Ns << "*" << nt << "*" << N_i << "*" << N_j << "*" << N_k
+                 << " (filesize " << sizeString(Ns*nt*N_i*N_j*N_k*sizeof(HADRONS_A2AN_IO_TYPE)) 
                  << "/momentum/bilinear)" << std::endl;
 
     auto &ph = envGet(std::vector<ComplexField>, momphName_);
@@ -287,8 +269,7 @@ void TStagA2AMesonField<FImpl>::execute(void)
             std::vector<Real> p;
 
             envGetTmp(ComplexField, coor);
-            //ph[j] = zero;
-            ph[j] = Zero();
+            ph[j] = zero;
             for(unsigned int mu = 0; mu < mom_[j].size(); mu++)
             {
                 LatticeCoordinate(coor, mu);
@@ -300,11 +281,11 @@ void TStagA2AMesonField<FImpl>::execute(void)
         stopTimer("Momentum phases");
     }
 
-    auto ionameFn = [this](const unsigned int m, const unsigned int g)
+    auto ionameFn = [this](const unsigned int m)
     {
         std::stringstream ss;
 
-        ss << gamma_[g] << "_";
+        ss << "Nucleon_";
         for (unsigned int mu = 0; mu < mom_[m].size(); ++mu)
         {
             ss << mom_[m][mu] << ((mu == mom_[m].size() - 1) ? "" : "_");
@@ -313,21 +294,21 @@ void TStagA2AMesonField<FImpl>::execute(void)
         return ss.str();
     };
 
-    auto filenameFn = [this, &ionameFn](const unsigned int m, const unsigned int g)
+    auto filenameFn = [this, &ionameFn](const unsigned int m)
     {
         return par().output + "." + std::to_string(vm().getTrajectory()) 
-               + "/" + ionameFn(m, g) + ".h5";
+               + "/" + ionameFn(m) + ".h5";
     };
 
-    auto metadataFn = [this](const unsigned int m, const unsigned int g)
+    auto metadataFn = [this](const unsigned int m)
     {
-        StagA2AMesonFieldMetadata md;
+        A2ANucleonFieldMetadata md;
 
         for (auto pmu: mom_[m])
         {
             md.momentum.push_back(pmu);
         }
-        md.gamma = gamma_[g];
+        //md.gamma = gamma_[g];
         
         return md;
     };
@@ -335,13 +316,12 @@ void TStagA2AMesonField<FImpl>::execute(void)
     Kernel      kernel(gamma_, ph, envGetGrid(FermionField));
 
     envGetTmp(Computation, computation);
-    computation.execute(left, right, kernel, ionameFn, filenameFn, metadataFn);
+    // Update A2AMatrixBlockComputation for this
+    computation.execute(left, right, q3, kernel, ionameFn, filenameFn, metadataFn);
 }
-
-
 
 END_MODULE_NAMESPACE
 
 END_HADRONS_NAMESPACE
 
-#endif // Hadrons_MContraction_StagA2AMesonField_hpp_
+#endif // Hadrons_MContraction_A2ANucleonField_hpp_
