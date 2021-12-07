@@ -1122,29 +1122,17 @@ void A2AMatrixNucleonBlockComputation<T, Field, MetadataType, TIo>
             bytes    += kernel.bytes(N_iii, N_jjj, N_kkk);
 
             START_TIMER("cache copy");
-            parallel_for_nest5(int e =0;e<next_;e++)
-            for(int s =0;s< nstr_;s++)
-            for(int t =0;t< nt_;t++)
-            for(int iii=0;iii< N_iii;iii++)
-            for(int jjj=0;jjj< N_jjj;jjj++)
-            for(int kkk=0;kkk< N_kkk;kkk++)
-            {
-                mBlock(e,s,t,ii+iii,jj+jjj,kk+kkk) = mCacheBlock(e,s,t,iii,jjj,kkk);
+            thread_for_collapse(6, e, next_, {
+                for(int s =0;s< nstr_;s++)
+                    for(int t =0;t< nt_;t++)
+                        for(int iii=0;iii< N_iii;iii++)
+                            for(int jjj=0;jjj< N_jjj;jjj++)
+                                for(int kkk=0;kkk< N_kkk;kkk++){
+                                    mBlock(e,s,t,ii+iii,jj+jjj,kk+kkk) = mCacheBlock(e,s,t,iii,jjj,kkk);
                 
-                // MCA - DEBUGGING CHECK
-                
-                /*
-                if (t == 0)
-                {
-					LOG(Message) << t << " " << s << " " << ii+iii << " " << jj+jjj << " " << kk+kkk << " "
-						<< mBlock(e,s,t,ii+iii,jj+jjj,kk+kkk) << std::endl;
-					
-				}
-				*/
-				
-                
-            }
-            STOP_TIMER("cache copy");
+                                }
+                STOP_TIMER("cache copy");
+            });
         }
 
 		LOG(Message) << "t | mu | i | j | k | Value" << std::endl;
