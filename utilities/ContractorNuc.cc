@@ -29,9 +29,10 @@ See the full license in the file "LICENSE" in the top level distribution directo
 #include <Hadrons/A2AMatrixNucleon.hpp>
 #include <Hadrons/DiskVector.hpp>
 #include <Hadrons/TimerArray.hpp>
+#include <Hadrons/Module.hpp>
 
 using namespace Grid;
-using namespace QCD;
+//using namespace QCD;
 using namespace Hadrons;
 
 #define TIME_MOD(t) (((t) + par.global.nt) % par.global.nt)
@@ -150,7 +151,8 @@ void saveCorrelator(const Contractor::CorrelatorResult &result, const std::strin
     {
         fileStem += "_dt_" + std::to_string(dt);
     }
-    filename = dir + "/" + RESULT_FILE_NAME(fileStem, traj);
+    //filename = dir + "/" + RESULT_FILE_NAME(fileStem, traj);
+    filename = dir + "/" + ModuleBase::resultFilename(fileStem, traj);
     std::cout << "Saving correlator to '" << filename << "'" << std::endl;
     std::cout << "Result correlator is " << result.correlator << std::endl;
     makeFileDir(dir);
@@ -435,13 +437,19 @@ int main(int argc, char* argv[])
 
                 tAr.startTimer("Last term caching");
                 lastTerm[t].resize(ref.dimension(0), ref.dimension(1), ref.dimension(2), ref.dimension(3));
-                parallel_for (unsigned int mu = 0; mu < ref.dimension(0) ; mu++)
-                parallel_for (unsigned int k = 0; k < ref.dimension(3); k++)
-                parallel_for (unsigned int j = 0; j < ref.dimension(2); ++j)
-                for (unsigned int i = 0; i < ref.dimension(1); ++i)
-                {
-                    lastTerm[t](mu, i, j, k) = ref(mu, i, j, k);
-                }
+                //parallel_for (unsigned int mu = 0; mu < ref.dimension(0) ; mu++)
+                //parallel_for (unsigned int k = 0; k < ref.dimension(3); k++)
+                //parallel_for (unsigned int j = 0; j < ref.dimension(2); ++j)
+                thread_for(mu,ref.dimension(0),{
+                    thread_for(k,ref.dimension(3),{
+                        thread_for(j,ref.dimension(2),{
+                            for (unsigned int i = 0; i < ref.dimension(1); ++i)
+                            {
+                                lastTerm[t](mu, i, j, k) = ref(mu, i, j, k);
+                            }
+                        });
+                    });
+                });
                 tAr.stopTimer("Last term caching");
             }
             bytes = par.global.nt*lastTerm[0].dimension(0)*lastTerm[0].dimension(1)*lastTerm[0].dimension(2)
@@ -492,13 +500,19 @@ int main(int argc, char* argv[])
                     tAr.startTimer("Disk vector overhead");
                     const A2AMatrixNuc<ComplexD> &ref = a2aMatNuc.at(term.back())[dt];
                     tenW.resize(ref.dimension(0), ref.dimension(1), ref.dimension(2), ref.dimension(3));
-					parallel_for (unsigned int mu = 0; mu < ref.dimension(0) ; mu++)
-					parallel_for (unsigned int k = 0; k < ref.dimension(3); k++)
-					parallel_for (unsigned int j = 0; j < ref.dimension(2); ++j)
-					for (unsigned int i = 0; i < ref.dimension(1); ++i)
-					{
-						tenW(mu, i, j, k) = ref(mu, i, j, k);
-					}
+					//parallel_for (unsigned int mu = 0; mu < ref.dimension(0) ; mu++)
+					//parallel_for (unsigned int k = 0; k < ref.dimension(3); k++)
+					//parallel_for (unsigned int j = 0; j < ref.dimension(2); ++j)
+                    thread_for(mu,ref.dimension(0),{
+                        thread_for(k,ref.dimension(3),{
+                            thread_for(j,ref.dimension(2),{
+                                for (unsigned int i = 0; i < ref.dimension(1); ++i)
+                                {
+                                    tenW(mu, i, j, k) = ref(mu, i, j, k);
+                                }
+                            });
+                        });
+                    });
                     tAr.stopTimer("Disk vector overhead");
                     // MCA - don't think I need this, need to double check though
                     /*
