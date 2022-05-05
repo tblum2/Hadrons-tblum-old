@@ -859,8 +859,8 @@ void A2AMatrixNucIo<T>::initFile(const MetadataType &d, const unsigned int chunk
                                    static_cast<hsize_t>(ni_), 
                                    static_cast<hsize_t>(nj_),
                                    static_cast<hsize_t>(nk_)},
-                            chunk = {static_cast<hsize_t>(Ns),
-								     static_cast<hsize_t>(nt_), 
+                            chunk = {static_cast<hsize_t>(1),
+								     static_cast<hsize_t>(1),
                                      static_cast<hsize_t>(chunkSize), 
                                      static_cast<hsize_t>(chunkSize),
                                      static_cast<hsize_t>(chunkSize)};
