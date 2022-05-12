@@ -241,6 +241,18 @@ void TA2AVectors<FImpl, Pack>::execute(void)
         stopTimer("W high mode");
     }
 
+    // Print out v mode norms
+    for (unsigned int il = 0; il < Nl_; il++)
+        {
+          LOG(Message) << "V vector i = " << il << " (low mode)" << " | norm " << norm2(v[il]) << std::endl;
+        }
+    
+    // Print out w mode norms
+    for (unsigned int il = 0; il < Nl_; il++)
+        {
+          LOG(Message) << "W vector i = " << il << " (low mode)" << " | norm " << norm2(w[il]) << std::endl;
+    }
+
     // I/O if necessary
     if (!par().output.empty())
     {

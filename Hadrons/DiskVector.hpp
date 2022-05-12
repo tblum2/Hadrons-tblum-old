@@ -29,6 +29,7 @@
 
 #include <Hadrons/Global.hpp>
 #include <Hadrons/A2AMatrix.hpp>
+#include <Hadrons/A2AMatrixNucleon.hpp>
 #include <deque>
 #include <sys/stat.h>
 #include <ftw.h>
@@ -251,6 +252,95 @@ private:
                         << " " << tHash/1.0e6 << " sec " << matSize/tHash*1.0e6/1024/1024 << " MB/s");
         }
         if (saveGrid)   saveGrid->Barrier();
+    }
+};
+
+
+/******************************************************************************
+ *     Specialisation for Eigen tensors for nucleons               *
+ ******************************************************************************/
+template <typename T>
+using EigenDiskVectorTen = A2AMatrixNuc<T>;
+
+template <typename T>
+class EigenDiskVectorNuc: public DiskVectorBase<EigenDiskVectorTen<T>>
+{
+public:
+    using DiskVectorBase<EigenDiskVectorTen<T>>::DiskVectorBase;
+    typedef EigenDiskVectorTen<T> /*DEBUG - Matrix*/ Tensor;
+public:
+    T operator()(const unsigned int i, const Eigen::Index mu,
+                 const Eigen::Index j, const Eigen::Index k,
+                 const Eigen::Index m) const
+    {
+        return (*this)[i](mu, j, k, m);
+    }
+private:
+    virtual void load(EigenDiskVectorTen<T> &obj, const std::string filename) const
+    {
+        std::ifstream f(filename, std::ios::binary);
+        uint32_t      crc, check;
+        Eigen::Index  nRow_mu, nRow_j, nRow_k, nRow_m;
+        size_t        tenSize;
+        double        tRead, tHash;
+
+        f.read(reinterpret_cast<char *>(&crc), sizeof(crc));
+        f.read(reinterpret_cast<char *>(&nRow_mu), sizeof(nRow_mu));
+        f.read(reinterpret_cast<char *>(&nRow_j), sizeof(nRow_j));
+        f.read(reinterpret_cast<char *>(&nRow_k), sizeof(nRow_k));
+        f.read(reinterpret_cast<char *>(&nRow_m), sizeof(nRow_m));
+        obj.resize(nRow_mu, nRow_j, nRow_k, nRow_m); // MCA - need to make sure this can be done with tensors
+        tenSize = nRow_mu*nRow_j*nRow_k*nRow_m*sizeof(T);
+        tRead  = -usecond();
+        f.read(reinterpret_cast<char *>(obj.data()), tenSize);
+        tRead += usecond();
+        tHash  = -usecond();
+#ifdef USE_IPP
+        check  = GridChecksum::crc32c(obj.data(), tenSize);
+#else
+        check  = GridChecksum::crc32(obj.data(), tenSize);
+#endif
+        tHash += usecond();
+        DV_DEBUG_MSG(this, "Eigen read " << tRead/1.0e6 << " sec " << tenSize/tRead*1.0e6/1024/1024 << " MB/s");
+        DV_DEBUG_MSG(this, "Eigen crc32 " << std::hex << check << std::dec
+                     << " " << tHash/1.0e6 << " sec " << tenSize/tHash*1.0e6/1024/1024 << " MB/s");
+        if (crc != check)
+        {
+            HADRONS_ERROR(Io, "checksum failed")
+        }
+    }
+
+    virtual void save(const std::string filename, const EigenDiskVectorTen<T> &obj) const
+    {
+        std::ofstream f(filename, std::ios::binary);
+        uint32_t      crc;
+        Eigen::Index  nRow_mu, nRow_j, nRow_k, nRow_m;
+        size_t        tenSize;
+        double        tWrite, tHash;
+        
+        nRow_mu   = obj.dimension(0); // MCA - testing for rank 4 tensors
+        nRow_j    = obj.dimension(1); // MCA - testing for rank 4 tensors
+        nRow_k    = obj.dimension(2); // MCA - testing for rank 4 tensors
+        nRow_m    = obj.dimension(3); // MCA - testing for rank 4 tensors
+        tenSize = nRow_mu*nRow_j*nRow_k*nRow_m*sizeof(T);
+        tHash   = -usecond();
+#ifdef USE_IPP
+        crc     = GridChecksum::crc32c(obj.data(), tenSize);
+#else
+        crc     = GridChecksum::crc32(obj.data(), tenSize);
+#endif
+        tHash  += usecond();
+        f.write(reinterpret_cast<char *>(&crc), sizeof(crc));
+        f.write(reinterpret_cast<char *>(&nRow_mu), sizeof(nRow_mu));
+        f.write(reinterpret_cast<char *>(&nRow_j), sizeof(nRow_j));
+        f.write(reinterpret_cast<char *>(&nRow_k), sizeof(nRow_k));
+        f.write(reinterpret_cast<char *>(&nRow_m), sizeof(nRow_m));
+        tWrite = -usecond();
+        f.write(reinterpret_cast<const char *>(obj.data()), tenSize);
+        tWrite += usecond();
+        DV_DEBUG_MSG(this, "Eigen write " << tWrite/1.0e6 << " sec " << tenSize/tWrite*1.0e6/1024/1024 << " MB/s");
+        DV_DEBUG_MSG(this, "Eigen crc32 " << std::hex << crc << std::dec
+                     << " " << tHash/1.0e6 << " sec " << tenSize/tHash*1.0e6/1024/1024 << " MB/s");
     }
 };
 
