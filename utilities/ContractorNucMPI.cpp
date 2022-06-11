@@ -274,10 +274,8 @@ int main(int argc, char* argv[])
     // initialization
     Grid_init(&argc, &argv);
     
-    GridCartesian *Grid =
-        SpaceTimeGrid::makeFourDimGrid(GridDefaultLatt(),
-                                       GridDefaultSimd(4,1),
-                                       GridDefaultMpi());
+    GridCartesian *Grid = SpaceTimeGrid::makeFourDimGrid(GridDefaultLatt(), GridDefaultSimd(4,1), GridDefaultMpi());
+    
     // parse parameter file
     ContractorPar par;
     unsigned int  nMat, nCont;
@@ -335,7 +333,6 @@ int main(int argc, char* argv[])
 		
         for (auto &p: par.product)
         {
-			std::cout << "In the ProductPar loop" << std::endl;
 			std::cout << p.projectors << std::endl;
 			
             std::vector<std::string>               term = strToVec<std::string>(p.terms);
@@ -348,7 +345,7 @@ int main(int argc, char* argv[])
             std::vector<ComplexD>                  tmp_corr;
 
 
-			std::cout << "Printing out terms" << std::endl;
+			std::cout << "Baryon Fields:" << std::endl;
 			for (int i = 0; i < term.size(); i++)
 			{
 				std::cout << term[i] << std::endl;
@@ -455,13 +452,13 @@ int main(int argc, char* argv[])
                     tAr.startTimer("tr(A*B)"); // adjust this
                     A2AContractionNucleon::ContractNucleonTPlus(tmp_corr[gt],lastTerm[tLast],tenW);
                     // if antiperiodic (boundaryT = -1) do sign change
+                    // for tsink < tsrc
                     if (tLast+Grid->ThisRank()*localNt < dt)
                     {
                         tmp_corr[gt] *= p.boundaryT;
                     }
 						
-                    std::cout << "tLast " << tLast << " - dt " << dt << " | tsep " << gt <<
-                            " == " << tmp_corr[tg] << std::endl;
+                    //std::cout << "tLast " << tLast << " - dt " << dt << " | tsep " << gt << " == " << tmp_corr[tg] << std::endl;
                     result.correlator[tg] += tmp_corr[tg];
                     tAr.stopTimer("tr(A*B)");
                 }
