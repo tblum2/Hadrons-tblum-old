@@ -48,7 +48,7 @@ See the full license in the file "LICENSE" in the top level distribution directo
 
 // precision used for 
 #ifndef HADRONS_A2AN_CALC_TYPE
-#define HADRONS_A2AN_CALC_TYPE ComplexF
+#define HADRONS_A2AN_CALC_TYPE ComplexD
 #endif
 
 #define HADRONS_A2AN_PARALLEL_IO
@@ -126,6 +126,9 @@ public:
                    const unsigned int i, const unsigned int j, const unsigned int k);
     template <template <class> class Vec, typename VecT>
     void load(Vec<VecT> &v, double *tRead = nullptr);
+    template <template <class> class Vec, typename VecT>
+    void load(Vec<VecT> &v, GridCartesian *grid, double *tRead = nullptr);
+
 private:
     std::string  filename_{""}, dataname_{""};
     unsigned int nt_{0}, ni_{0}, nj_{0}, nk_{0};
@@ -214,22 +217,36 @@ public:
 		}
 		
 		// MCA - very basic parallelization for now
-                thread_for(mu, Ns,{
+                /*thread_for(mu, Ns,{
                         thread_for(nu,Ns,{
                                 for (int i = 0; i < nRow_i; i++)
                                 for (int j = 0; j < nRow_j; j++)
                                 for (int k = 0; k < nRow_k; k++)
                                 {
                                         ComplexD tmp;
-                                        tmp = a(mu,i,j,k) * std::conj(b(nu,i,j,k))
-                                                        - a(mu,i,j,k) * std::conj(b(nu,k,j,i));
+                                        //tmp = a(mu,i,j,k) * std::conj(b(nu,i,j,k))
+                                        //    - a(mu,i,j,k) * std::conj(b(nu,k,j,i));
+                                        tmp = a(mu,i,j,k) * (std::conj(b(nu,i,j,k)) - std::conj(b(nu,k,j,i)));
                                         spinMat(mu,nu) += tmp;
-
                                 }
                         });
+               });*/
+               //for(int mu=0; mu<Ns; mu++) {
+               //thread_for_collapse(5, mu, Ns, {
+               thread_for(mu, Ns, {
+                   for(int nu=0; nu < Ns; nu++)
+                      for (int i = 0; i < nRow_i; i++)
+                        for (int j = 0; j < nRow_j; j++)
+                          for (int k = 0; k < nRow_k; k++)
+                             {
+                                //ComplexD tmp;
+                                //tmp = a(mu,i,j,k) * (std::conj(b(nu,i,j,k)) - std::conj(b(nu,k,j,i)));
+                                //ComplexD tmp2(b(nu,i,j,k).real()-b(nu,k,j,i).real(),b(nu,k,j,i).imag()-b(nu,i,j,k).imag());
+                                //tmp = a(mu,i,j,k) * tmp2;
+                                //spinMat(mu,nu) += tmp;
+                                spinMat(mu,nu) += a(mu,i,j,k) * (std::conj(b(nu,i,j,k)) - std::conj(b(nu,k,j,i)));
+                             }
                });
-		
-		//std::cout << "DEBUG: Nucleon contraction 1 ended" << std::endl;
 	}
 
 	static void contNucTenTest()
@@ -1095,6 +1112,165 @@ void A2AMatrixNucIo<T>::load(Vec<VecT> &v, double *tRead)
     HADRONS_ERROR(Implementation, "all-to-all matrix I/O needs HDF5 library");
 #endif
 }
+
+
+template <typename T>
+template <template <class> class Vec, typename VecT>
+void A2AMatrixNucIo<T>::load(Vec<VecT> &v, GridCartesian *grid, double *tRead)
+{
+#ifdef HAVE_HDF5
+    Hdf5Reader           reader(filename_);
+    std::vector<hsize_t> hdim;
+    H5NS::DataSet        dataset;
+    H5NS::DataSpace      dataspace;
+    H5NS::CompType       datatype;
+    H5NS::DSetCreatPropList plist;
+    
+    push(reader, dataname_);
+    auto &group = reader.getGroup();
+    dataset     = group.openDataSet(HADRONS_A2AN_NAME);
+    plist       = dataset.getCreatePlist();
+    datatype    = dataset.getCompType();
+    dataspace   = dataset.getSpace();
+    hdim.resize(dataspace.getSimpleExtentNdims());
+    dataspace.getSimpleExtentDims(hdim.data());
+        
+    // chunking info
+    bool isChunked = false;
+    hsize_t chunk_dim[5];
+    int rank_chunk;
+    unsigned int chunkCount = 1;
+    
+    // adjust the chunk cache to try to improve performance
+    hid_t dapl_id = H5Dget_access_plist(dataset.getId());
+    hsize_t max_objects_in_chunk_cache = 12799;
+    hsize_t max_bytes_in_cache = 128*1024*1024;
+    
+    H5Pset_chunk_cache(dapl_id, max_objects_in_chunk_cache, max_bytes_in_cache, H5D_CHUNK_CACHE_W0_DEFAULT);
+    
+    if (plist.getLayout() == H5D_CHUNKED)
+    {
+        isChunked = true;
+        rank_chunk = plist.getChunk(5, chunk_dim);
+        std::cout << "Data is chunked with rank " << std::to_string(rank_chunk) << std::endl;
+        std::cout << "and chunk dimensions " << std::to_string(chunk_dim[0]) << " " <<
+                                                std::to_string(chunk_dim[1]) << " " <<
+                                                std::to_string(chunk_dim[2]) << " " <<
+                                                std::to_string(chunk_dim[3]) << " " <<
+                                                std::to_string(chunk_dim[4]) << std::endl;
+    }
+    
+    std::cout << "DEBUG: Ns nt_ ni_ nj_ nk_ are " << std::to_string(Ns) << " " << std::to_string(nt_) << " " << std::to_string(ni_) << " "
+              << std::to_string(nj_) << " " << std::to_string(nk_) << std::endl;
+    std::cout << "hdims are " <<std::to_string(hdim[0]) << " " << std::to_string(hdim[1]) << " " << std::to_string(hdim[2]) << " "
+              << std::to_string(hdim[3]) << " " << std::to_string(hdim[4]) << std::endl;
+    if ((Ns*nt_*ni_*nj_*nk_ != 0) and
+        ((hdim[0] != Ns) or (hdim[1] != nt_*grid->_processors[3]) or (hdim[2] != ni_) or (hdim[3] != nj_) or (hdim[4] != nk_)))
+    {
+        HADRONS_ERROR(Size, "all-to-all matrix size mismatch (got "
+            + std::to_string(hdim[0]) + "x" + std::to_string(hdim[1]) + "x"
+            + std::to_string(hdim[2]) + "x" + std::to_string(hdim[3]) + "x"
+            + std::to_string(hdim[4]) + ", expected "
+            + std::to_string(Ns) + "x"
+            + std::to_string(nt_*grid->_processors[3]) + "x" + std::to_string(ni_) + "x"
+            + std::to_string(nj_) + "x" + std::to_string(nk_));
+    }
+    else if (ni_*nj_*nk_ == 0)
+    {
+        if ((hdim[0] != nt_*grid->_processors[3]) or (hdim[1] != Ns))
+        {
+            HADRONS_ERROR(Size, "all-to-all time size mismatch (got "
+                + std::to_string(hdim[0]) + "x"
+                + std::to_string(hdim[1]) + ", expected "
+                + std::to_string(nt_*grid->_processors[3]) + "x"
+                + std::to_string(Ns) + ")");
+        }
+        ni_ = hdim[2];
+        nj_ = hdim[3];
+        nk_ = hdim[4];
+    }
+    
+    // check to make sure that mode number is divisible by chunk dimensions
+    if (isChunked == true)
+    {
+        if ((hdim[2] % chunk_dim[2] != 0) or (hdim[3] % chunk_dim[3] != 0) or (hdim[4] % chunk_dim[4] != 0))
+        {
+            HADRONS_ERROR(Size, "all-to-all chunk size mismatch (not a divisor of overall dimensions): got chunk dims"
+            + std::to_string(chunk_dim[0]) + "x" + std::to_string(chunk_dim[1]) + "x"
+            + std::to_string(chunk_dim[2]) + "x" + std::to_string(chunk_dim[3]) + "x"
+            + std::to_string(chunk_dim[4]) + ", for overall dims "
+            + std::to_string(hdim[0]) + "x"
+            + std::to_string(hdim[1]) + "x" + std::to_string(hdim[2]) + "x"
+            + std::to_string(hdim[3]) + "x" + std::to_string(hdim[4]));
+        }
+        else
+        {
+            chunkCount = hdim[2] / chunk_dim[2];
+        }
+    }
+
+    A2AMatrixNuc<T>         buf(Ns, ni_, nj_, nk_);
+ 
+    // Default values
+    std::vector<hsize_t> count    = {1, static_cast<hsize_t>(Ns),
+                                     static_cast<hsize_t>(ni_),
+                                     static_cast<hsize_t>(nj_),
+                                     static_cast<hsize_t>(nk_)},
+                         stride   = {1, 1, 1, 1, 1},
+                         block    = {1, 1, 1, 1, 1},
+                         memCount = {static_cast<hsize_t>(Ns),
+                                     static_cast<hsize_t>(ni_),
+                                     static_cast<hsize_t>(nj_),
+                                     static_cast<hsize_t>(nk_)};
+    
+    // Adjust hyperslab selection values if data is chunked
+    if (isChunked == true)
+    {
+        count    = {1, 1,
+                    static_cast<hsize_t>(chunkCount),
+                    static_cast<hsize_t>(chunkCount),
+                    static_cast<hsize_t>(chunkCount)},
+        stride   = {1, 1, chunk_dim[2], chunk_dim[3], chunk_dim[4]},
+        block    = {1, static_cast<hsize_t>(Ns), chunk_dim[2], chunk_dim[3], chunk_dim[4]},
+        memCount = {static_cast<hsize_t>(Ns),
+                    static_cast<hsize_t>(ni_),
+                    static_cast<hsize_t>(nj_),
+                    static_cast<hsize_t>(nk_)};
+    }
+
+    H5NS::DataSpace      memspace(memCount.size(), memCount.data());
+
+    std::cout << "Loading timeslice";
+    std::cout.flush();
+    std::cout.flush();
+    *tRead = 0.;
+    int localNt = grid->LocalDimensions()[3];
+    int globalNt = grid->GlobalDimensions()[3];
+    int tshift = grid->_processor_coor[3] * localNt;
+    for (unsigned int tp1 = localNt; tp1 > 0; --tp1)
+    {
+        unsigned int         t      = tp1 - 1;
+        std::vector<hsize_t> offset = {static_cast<hsize_t>(t+tshift)%globalNt, 0, 0, 0, 0};
+        
+        if (t % 1 == 0)
+        {
+            std::cout << " " << t;
+            std::cout.flush();
+        }
+        dataspace.selectHyperslab(H5S_SELECT_SET, count.data(), offset.data(),
+                                  stride.data(), block.data());
+        if (tRead) *tRead -= usecond();
+        dataset.read(buf.data(), datatype, memspace, dataspace);
+        if (tRead) *tRead += usecond();
+        v[t] = buf.template cast<VecT>();
+    }
+    std::cout << std::endl;
+#else
+    HADRONS_ERROR(Implementation, "all-to-all matrix I/O needs HDF5 library");
+#endif
+}
+
+
 
 /******************************************************************************
  *               A2AMatrixBlockComputation template implementation            *

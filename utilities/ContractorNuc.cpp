@@ -544,59 +544,31 @@ int main(int argc, char* argv[])
                     // MCA - core computation loop -- needs to be cleaned up
                     // that contracts two nucleon LMA/A2A fields leaving a 4x4 spin matrix that will be
                     // projected upon and traced over
-                    for (unsigned int tLast = 0; tLast < par.global.nt; ++tLast)
-                    {
-						tmp_corr[TIME_MOD(tLast - dt)] = 0.;
+                    //for (unsigned int tLast = 0; tLast < par.global.nt; ++tLast){
+                    thread_for(tLast, par.global.nt, {
+			tmp_corr[TIME_MOD(tLast - dt)] = 0.;
                         spinMatInit(tmp_spinMat[TIME_MOD(tLast - dt)]);
-                        //tmp_spinMat[TIME_MOD(tLast - dt)] = Zero();
-                        tAr.startTimer("tr(A*B)"); // adjust this
+			//tmp_spinMat[TIME_MOD(tLast - dt)] = Zero();
+                        //tAr.startTimer("tr(A*B)"); // adjust this
                         
                         // do contractions
                         A2AContractionNucleon::contNucTen(tmp_spinMat[TIME_MOD(tLast - dt)], lastTerm[tLast], tenW);
-                        //A2AContractionNucleon::ContractNucleonTPlus(tmp_corr[TIME_MOD(tLast - dt)], lastTerm[tLast], tenW);
-                        
-                        // if antiperiodic (boundaryT = -1) do sign change
-                        
                         if (tLast < dt)
                         {
-							//tmp_corr[TIME_MOD(tLast - dt)] *= p.boundaryT;
-							tmp_spinMat[TIME_MOD(tLast - dt)] *= p.boundaryT;
-						}
-                        
-						
-                        /*
-						std::cout << "tLast " << tLast << " - dt " << dt << " | tsep " << TIME_MOD(tLast - dt) << 
-								" == " << tmp_corr[TIME_MOD(tLast - dt)] << std::endl;
-						*/
-                        
-                        /*
-                        std::cout << "tLast " << tLast << " - dt " << dt << " | tsep " << TIME_MOD(tLast - dt) <<
-                                " == " << std::endl;
-                        std::cout << tmp_spinMat[TIME_MOD(tLast - dt)] << std::endl;
-                        */
-                        
-						//std::cout << "Summing correlator for tsnk - tsrc " << TIME_MOD(tLast - dt) << std::endl;
-						//std::cout << "Existing: " << result.correlator[TIME_MOD(tLast - dt)] << " --- "
-						//			<< "Adding: " << tmp_corr[TIME_MOD(tLast - dt)] << std::endl;
-						
-                        //result.corrSpinMat[TIME_MOD(tLast - dt)] = result.corrSpinMat[TIME_MOD(tLast - dt)] + tmp_spinMat[TIME_MOD(tLast - dt)];
-                        
-                        //result.correlator[TIME_MOD(tLast - dt)] += tmp_corr[TIME_MOD(tLast - dt)];
+			   tmp_spinMat[TIME_MOD(tLast - dt)] *= p.boundaryT;
+			}
+
                         for (int mu = 0; mu < Ns; mu++)
                         for (int nu = 0; nu < Ns; nu++)
                         {
                             result.corr[TIME_MOD(tLast - dt)]()(mu, nu)() += tmp_spinMat[TIME_MOD(tLast - dt)](mu, nu);
                         }
-                        tAr.stopTimer("tr(A*B)");
-                        
-                        // MCA - need to update these for nuc2pt versions
-                        //flops += A2AContraction::accTrMulFlops(prod, lastTerm[tLast]);
-                        //bytes += 2.*prod.rows()*prod.cols()*sizeof(ComplexD);
-                    }
+                        //tAr.stopTimer("tr(A*B)");
+                    });
                     tAr.stopTimer("Linear algebra");
-                    std::cout << Sec(tAr.getDTimer("tr(A*B)") - busec) << " "
-                            << Flops(flops, tAr.getDTimer("tr(A*B)") - fusec) << " " 
-                            << Bytes(bytes, tAr.getDTimer("tr(A*B)") - busec) << std::endl;
+                    //std::cout << Sec(tAr.getDTimer("tr(A*B)") - busec) << " "
+                     //       << Flops(flops, tAr.getDTimer("tr(A*B)") - fusec) << " " 
+                      //      << Bytes(bytes, tAr.getDTimer("tr(A*B)") - busec) << std::endl;
                             
                     // if we're not averaging over source times -- save data to file and flush correlator data
                     if (!p.translationAverage)
