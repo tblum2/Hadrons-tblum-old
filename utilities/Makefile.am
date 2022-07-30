@@ -4,6 +4,7 @@ AM_CXXFLAGS += -I$(top_srcdir)
 bin_PROGRAMS = \
   HadronsContractor          \
   HadronsContractorCCMPI     \
+  HadronsContractorNucMPI     \
   HadronsContractorBenchmark \
   HadronsXmlRun              \
   HadronsXmlValidate         \
@@ -24,6 +25,9 @@ HadronsContractor_LDADD   = -lHadrons -lGrid
 
 HadronsContractorCCMPI_SOURCES = ContractorCCMPI.cpp
 HadronsContractorCCMPI_LDADD   = -lHadrons -lGrid
+
+HadronsContractorNucMPI_SOURCES = ContractorNucMPI.cpp
+HadronsContractorNucMPI_LDADD   = -lHadrons -lGrid
 
 HadronsContractorBenchmark_SOURCES = ContractorBenchmark.cpp
 HadronsContractorBenchmark_LDADD   = -lHadrons -lGrid
