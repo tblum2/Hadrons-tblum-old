@@ -620,7 +620,7 @@ public:
                 {
                     acc += tmp;
                 }
-            });
+            }
         }
         else
         {
@@ -635,7 +635,7 @@ public:
                 {
                     acc += tmp;
                 }
-            });
+            }
         }
     }
 
@@ -1173,6 +1173,7 @@ void A2AMatrixNucIo<T>::load(Vec<VecT> &v, GridCartesian *grid, double *tRead)
             + std::to_string(hdim[4]) + ", expected "
             + std::to_string(Ns) + "x"
             + std::to_string(nt_*grid->_processors[3]) + "x" + std::to_string(ni_) + "x"
+            + std::to_string(nt_) + "x" + std::to_string(ni_) + "x"
             + std::to_string(nj_) + "x" + std::to_string(nk_));
     }
     else if (ni_*nj_*nk_ == 0)
@@ -1373,6 +1374,7 @@ void A2AMatrixNucleonBlockComputation<T, Field, MetadataType, TIo>
         }
 
 	LOG(Message) << "t | i | j | k | mu Value" << std::endl;
+
         // perf
         LOG(Message) << "Kernel perf " << flops/t_kernel/1.0e3/nodes 
                      << " Gflop/s/node " << std::endl;

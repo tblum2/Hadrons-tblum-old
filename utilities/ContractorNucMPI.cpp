@@ -85,7 +85,6 @@ namespace Contractor
                                         int, boundaryT,
 					std::string, output);
     };
-
     class CorrelatorResult: Serializable
     {
     public:
