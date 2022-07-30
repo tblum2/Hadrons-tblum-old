@@ -619,7 +619,7 @@ public:
                 {
                     acc += tmp;
                 }
-            });
+            }
         }
         else
         {
@@ -634,7 +634,7 @@ public:
                 {
                     acc += tmp;
                 }
-            });
+            }
         }
     }
 
@@ -996,7 +996,7 @@ void A2AMatrixNucIo<T>::load(Vec<VecT> &v, double *tRead)
     
     if (plist.getLayout() == H5D_CHUNKED)
     {
-        isChunked = true;
+        isChunked == true;
         rank_chunk = plist.getChunk(5, chunk_dim);
         std::cout << "Data is chunked with rank " << std::to_string(rank_chunk) << std::endl;
         std::cout << "and chunk dimensions " << std::to_string(chunk_dim[0]) << " " <<
@@ -1163,24 +1163,25 @@ void A2AMatrixNucIo<T>::load(Vec<VecT> &v, GridCartesian *grid, double *tRead)
     std::cout << "hdims are " <<std::to_string(hdim[0]) << " " << std::to_string(hdim[1]) << " " << std::to_string(hdim[2]) << " "
               << std::to_string(hdim[3]) << " " << std::to_string(hdim[4]) << std::endl;
     if ((Ns*nt_*ni_*nj_*nk_ != 0) and
-        ((hdim[0] != Ns) or (hdim[1] != nt_) or (hdim[2] != ni_) or (hdim[3] != nj_) or (hdim[4] != nk_)))
+        ((hdim[0] != Ns) or (hdim[1] != nt_*grid->_processors[3]) or (hdim[2] != ni_) or (hdim[3] != nj_) or (hdim[4] != nk_)))
     {
         HADRONS_ERROR(Size, "all-to-all matrix size mismatch (got "
             + std::to_string(hdim[0]) + "x" + std::to_string(hdim[1]) + "x"
             + std::to_string(hdim[2]) + "x" + std::to_string(hdim[3]) + "x"
             + std::to_string(hdim[4]) + ", expected "
             + std::to_string(Ns) + "x"
+            + std::to_string(nt_*grid->_processors[3]) + "x" + std::to_string(ni_) + "x"
             + std::to_string(nt_) + "x" + std::to_string(ni_) + "x"
             + std::to_string(nj_) + "x" + std::to_string(nk_));
     }
     else if (ni_*nj_*nk_ == 0)
     {
-        if ((hdim[0] != nt_) or (hdim[1] != Ns))
+        if ((hdim[0] != nt_*grid->_processors[3]) or (hdim[1] != Ns))
         {
             HADRONS_ERROR(Size, "all-to-all time size mismatch (got "
                 + std::to_string(hdim[0]) + "x"
                 + std::to_string(hdim[1]) + ", expected "
-                + std::to_string(nt_) + "x"
+                + std::to_string(nt_*grid->_processors[3]) + "x"
                 + std::to_string(Ns) + ")");
         }
         ni_ = hdim[2];
@@ -1267,6 +1268,8 @@ void A2AMatrixNucIo<T>::load(Vec<VecT> &v, GridCartesian *grid, double *tRead)
     HADRONS_ERROR(Implementation, "all-to-all matrix I/O needs HDF5 library");
 #endif
 }
+
+
 
 /******************************************************************************
  *               A2AMatrixBlockComputation template implementation            *

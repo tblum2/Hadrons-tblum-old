@@ -37,6 +37,9 @@ using namespace Hadrons;
 
 #define TIME_MOD(t) (((t) + par.global.nt) % par.global.nt)
 
+template <typename T>
+using A2AMatrix3index = Eigen::Tensor<T,3,Eigen::RowMajor>;
+
 namespace Contractor
 {
     class TrajRange: Serializable
@@ -79,11 +82,9 @@ namespace Contractor
                                         std::vector<std::string>, times,
                                         std::string, translations,
                                         bool, translationAverage,
-                                        std::string, projectors,
-                                        int, boundaryT);
+                                        int, boundaryT,
+					std::string, output);
     };
-
-
     class CorrelatorResult: Serializable
     {
     public:
@@ -91,7 +92,7 @@ namespace Contractor
                                         std::vector<Contractor::A2AMatrixNucPar>,  a2aMatrixNuc,
                                         ProductPar, contraction,
                                         std::vector<unsigned int>, times,
-                                        std::vector<ComplexD>, correlator);
+                                        std::vector<SpinMatrix>, correlator);
     };
 }
 
@@ -131,36 +132,53 @@ void makeTimeSeq(std::vector<std::vector<unsigned int>> &timeSeq,
     makeTimeSeq(timeSeq, times, current, times.size());
 }
 
-// MCA - need to go through this
-
-void saveCorrelator(const Contractor::CorrelatorResult &result, const std::string dir, 
+void saveCorrelator(const Contractor::CorrelatorResult &result, const std::string dir,
                     const unsigned int dt, const unsigned int traj)
 {
     std::string              fileStem = "", filename;
     std::vector<std::string> terms = strToVec<std::string>(result.contraction.terms);
 
-	fileStem += "nuc2pt";
+    fileStem += "nuc2pt";
 
-	// MCA - don't need this for 2pt
-    /*for (unsigned int i = 0; i < terms.size() - 1; i++)
-    {
-        fileStem += terms[i] + "_" + std::to_string(result.times[i]) + "_";
-    }
-    fileStem += terms.back();*/
     if (!result.contraction.translationAverage)
     {
         fileStem += "_dt_" + std::to_string(dt);
     }
-    //filename = dir + "/" + RESULT_FILE_NAME(fileStem, traj);
     filename = dir + "/" + ModuleBase::resultFilename(fileStem, traj);
     std::cout << "Saving correlator to '" << filename << "'" << std::endl;
-    std::cout << "Result correlator is " << result.correlator << std::endl;
+    //DEBUG: std::cout << "Result correlator is " << result.correlator << std::endl;
     makeFileDir(dir);
     ResultWriter writer(filename);
-    std::cout << "Still working here" << std::endl;
     write(writer, fileStem, result);
 }
 
+// correlation function output file creation
+void initCorrFile(const std::string filename,
+                  const unsigned int ni)
+{
+#ifdef HAVE_HDF5
+
+    try{
+        H5::H5File file(filename, H5F_ACC_EXCL);
+
+        // Create the data space for the dataset.
+        hsize_t dims[1];               // dataset dimension: 1d for time dir
+        dims[0] = ni;
+        H5::DataSpace dataspace(1, dims);
+
+        // Create the dataset.
+        H5::DataSet dataset = file.createDataSet("corrfunc_dset", Hdf5Type<ComplexD>::type(), dataspace);
+    }
+    // catch failure caused by the H5File operations
+    catch(H5::FileIException error)
+    {
+        error.printErrorStack();
+    }
+
+#else
+    HADRONS_ERROR(Implementation, "correlation function I/O needs HDF5 library");
+#endif
+}
 
 // MCA - need to go through this
 
@@ -205,6 +223,15 @@ std::set<unsigned int> parseTimeRange(const std::string str, const unsigned int 
     return tSet;
 }
 
+template <typename C>
+void spinMatInit(C &mat)
+{
+    for (int mu = 0; mu < Ns; mu++)
+    for (int nu = 0; nu < Ns; nu++)
+    {
+        mat(mu, nu) = 0.;
+    }
+}
 
 struct Sec
 {
@@ -262,9 +289,9 @@ int main(int argc, char* argv[])
     // parse command line
     std::string   parFilename;
 
-    if (argc != 2)
+    if (argc < 2)
     {
-        std::cerr << "usage: " << argv[0] << " <parameter file>";
+        std::cerr << "usage: " << argv[0] << " <parameter file> [grid options]";
         std::cerr << std::endl;
         
         return EXIT_FAILURE;
@@ -329,20 +356,16 @@ int main(int argc, char* argv[])
 
 		A2AContractionNucleon::testProjTPlus();
 
-		// MCA - remove this loop or adjust to do projectors for 2pt nucleon
-		
         for (auto &p: par.product)
         {
-			std::cout << p.projectors << std::endl;
-			
             std::vector<std::string>               term = strToVec<std::string>(p.terms);
             std::set<unsigned int>                 translations;
-            std::vector<A2AMatrixNuc<ComplexD>>    lastTerm(par.global.nt);
+            std::vector<A2AMatrixNuc<ComplexD>>    lastTerm(localNt);
             A2AMatrixNuc<ComplexD>                 tenW;
             TimerArray                             tAr;
             double                                 fusec, busec, flops, bytes, tusec;
             Contractor::CorrelatorResult           result;
-            std::vector<ComplexD>                  tmp_corr;
+ 	    std::vector<A2AMatrix<ComplexD>>       tmp_spinMat(par.global.nt);
 
 
 			std::cout << "Baryon Fields:" << std::endl;
@@ -363,45 +386,49 @@ int main(int argc, char* argv[])
                 }
             }
             result.contraction = p;
-            result.correlator.resize(par.global.nt, 0.);
-            tmp_corr.resize(par.global.nt, 0.);
-			
-			std::vector<unsigned int> debug_times = {0};
-			result.times = debug_times; // DEBUG -- to keep saveCorrelator from crashing
+            result.correlator.resize(par.global.nt);
+            for (int t = 0; t < par.global.nt; t++)
+            {
+                result.correlator[t] = Zero();
+            }
+	    std::vector<unsigned int> debug_times = {0};
+	    result.times = debug_times; // DEBUG -- to keep saveCorrelator from crashing
 
             translations = parseTimeRange(p.translations, par.global.nt);
 
-			std::cout << "* Caching last term sink times" << std::endl;
-            for (unsigned int t = 0; t < localNt; ++t)
-            {
+	    std::cout << "* Caching last term sink times" << std::endl;
+            for (unsigned int t = 0; t < localNt; t++) {
+
                 tAr.startTimer("Disk vector overhead");
                 const A2AMatrixNuc<ComplexD> &ref = a2aMatNuc.at(term.front())[t];
                 tAr.stopTimer("Disk vector overhead");
 
                 tAr.startTimer("Last term caching");
                 lastTerm[t].resize(ref.dimension(0), ref.dimension(1), ref.dimension(2), ref.dimension(3));
-                for(int mu=0;ref.dimension(0);mu++){
-                    for(int k=0;ref.dimension(3);k++){
-                        for(int j=0;ref.dimension(2);j++){
-                            for (unsigned int i = 0; i < ref.dimension(1); ++i)
-                            {
+                thread_for(mu,ref.dimension(0),{
+                    thread_for(k,ref.dimension(3),{
+                        thread_for(j,ref.dimension(2),{
+                            for (int i=0;i<ref.dimension(1);i++)
+			    {
                                 lastTerm[t](mu, i, j, k) = ref(mu, i, j, k);
                             }
-                        }
-                    }
-                }
+                        });
+                    });
+                });
                 tAr.stopTimer("Last term caching");
             }
             bytes = localNt*lastTerm[0].dimension(0)*lastTerm[0].dimension(1)*lastTerm[0].dimension(2)
-									*lastTerm[0].dimension(3)*sizeof(ComplexD);
+		   	   *lastTerm[0].dimension(3)*sizeof(ComplexD);
             std::cout << Sec(tAr.getDTimer("Last term caching")) << " " 
                       << Bytes(bytes, tAr.getDTimer("Last term caching")) << std::endl;
 
             // Initialize the correlator
-            for (unsigned int tLast = 0; tLast < par.global.nt; ++tLast)
+	    for (unsigned int tLast = 0; tLast < par.global.nt; ++tLast)
             {
-                result.correlator[tLast] = 0.;
+                tmp_spinMat[tLast].resize(Ns,Ns);
+                spinMatInit(tmp_spinMat[tLast]);
             }
+
             for (auto &dt: translations)
             {
                 std::cout << "* Step " << dt + 1 << "/" << translations.size() << " -- dt= " << dt << std::endl;
@@ -419,48 +446,62 @@ int main(int argc, char* argv[])
                 std::cout<<" dt= "<<dt<<" src node= "<<srcNode<<std::endl;
                 
 		uint64_t a2abytes; 
-                if(srcNode==Grid->ThisRank()){
-                    
-                    const A2AMatrixNuc<ComplexD> &ref = a2aMatNuc.at(term.back())[dt%localNt];
-                    tenW.resize(ref.dimension(0), ref.dimension(1), ref.dimension(2), ref.dimension(3));
-                    for(int mu=0;ref.dimension(0);mu++){
-                        for(int k=0;ref.dimension(3);k++){
-                            for(int j=0;ref.dimension(2);j++){
-                                for (unsigned int i = 0; i < ref.dimension(1); ++i)
-                                {
-                                    tenW(mu, i, j, k) = ref(mu, i, j, k);
-                                }
+                const A2AMatrixNuc<ComplexD> &ref = a2aMatNuc.at(term.back())[dt%localNt];
+                tenW.resize(ref.dimension(0), ref.dimension(1), ref.dimension(2), ref.dimension(3));
+		A2AMatrix3index<ComplexD> temp;
+                temp.resize(ref.dimension(1), ref.dimension(2), ref.dimension(3));
+                a2abytes = sizeof(ComplexD)*ref.dimension(1)*ref.dimension(2)*ref.dimension(3);
+		// do 1 spin at a time so MPI_bcast doesn't break
+                // thread_for broke something here
+                for(int mu=0;mu<ref.dimension(0);mu++)
+		{
+		    if(srcNode==Grid->ThisRank())
+		    {
+                       for(int k=0;k<ref.dimension(3);k++){
+                           for(int j=0;j<ref.dimension(2);j++){
+                               for (unsigned int i = 0; i < ref.dimension(1); i++)
+                               {
+		         	   temp(i,j,k) = ref(mu, i, j ,k);
+                               }
                             }
                         }
                     }
-                    a2abytes = sizeof(HADRONS_A2AN_IO_TYPE) * ref.dimension(0)*ref.dimension(1)*ref.dimension(2)*ref.dimension(3);
+                    Grid->Broadcast(srcNode, temp.data(), a2abytes);
+                    for(int k=0;k<ref.dimension(3);k++){
+                        for(int j=0;j<ref.dimension(2);j++){
+                           for (unsigned int i = 0; i < ref.dimension(1); i++)
+                           {
+                               tenW(mu, i, j, k) = temp(i,j,k);
+                           }
+                        }
+                    }
                 }
-                Grid->Broadcast(srcNode, tenW.data(), a2abytes);
-                
+ 
                 tAr.stopTimer("Disk vector overhead");
                 
                 flops  = 0.;
                 bytes  = 0.;
                 fusec  = tAr.getDTimer("tr(A*B)"); // this too
                 busec  = tAr.getDTimer("tr(A*B)"); // same
-                // MCA - core computation loop -- replace this with nucleon code in A2AMatrixNuc
-                // that contracts two nucleon LMA/A2A fields leaving a 4x4 spin matrix that will be
-                // projected upon and traced over
                 for (unsigned int tLast = 0; tLast < localNt; ++tLast)
-                {
+		{
+                
                     int gt = TIME_MOD(tLast+Grid->ThisRank()*localNt - dt);
-                    tmp_corr[gt] = 0.;
+                    spinMatInit(tmp_spinMat[gt]);
                     tAr.startTimer("tr(A*B)"); // adjust this
-                    A2AContractionNucleon::ContractNucleonTPlus(tmp_corr[gt],lastTerm[tLast],tenW);
-                    // if antiperiodic (boundaryT = -1) do sign change
-                    // for tsink < tsrc
-                    if (tLast+Grid->ThisRank()*localNt < dt)
+		    A2AContractionNucleon::contNucTen(tmp_spinMat[gt], lastTerm[tLast], tenW);
+                    // if antiperiodic (boundaryT = -1) do sign change for tsink < tsrc
+                    if (tLast + Grid->ThisRank()*localNt < dt)
                     {
-                        tmp_corr[gt] *= p.boundaryT;
+                       tmp_spinMat[gt] *= p.boundaryT;
                     }
-						
-                    //std::cout << "tLast " << tLast << " - dt " << dt << " | tsep " << gt << " == " << tmp_corr[gt] << std::endl;
-                    result.correlator[gt] += tmp_corr[gt];
+
+                    for (int mu = 0; mu < Ns; mu++)
+                       for (int nu = 0; nu < Ns; nu++)
+                       {
+                            result.correlator[gt]()(mu, nu)() += tmp_spinMat[gt](mu, nu);
+                       }
+				
                     tAr.stopTimer("tr(A*B)");
                 }
                 tAr.stopTimer("Linear algebra");
@@ -469,32 +510,38 @@ int main(int argc, char* argv[])
                         << Bytes(bytes, tAr.getDTimer("tr(A*B)") - busec) << std::endl;
                 if (!p.translationAverage)
                 {
-                    Grid->GlobalSumVector(result.correlator.data(), par.global.nt);
-                    
+                    for (unsigned int t = 0; t < par.global.nt; ++t)
+                    {
+                        Grid->GlobalSum(result.correlator[t]);
+                    } 
                     if(Grid->IsBoss()){
-                        saveCorrelator(result, par.global.output, dt, traj);
+                        saveCorrelator(result, p.output, dt, traj);
                     }
                     for (unsigned int t = 0; t < par.global.nt; ++t)
                     {
-                        result.correlator[t] = 0.;
+                        result.correlator[t] = Zero();
                     }
                 }
             }
             if (p.translationAverage)
             {
-                Grid->GlobalSumVector(result.correlator.data(), par.global.nt);
-                
                 for (unsigned int t = 0; t < par.global.nt; ++t)
                 {
-                    result.correlator[t] /= translations.size();
-                    std::cout << t << " -- " << result.correlator[t] << std::endl;
+                    Grid->GlobalSum(result.correlator[t]);
+                } 
+                if(Grid->IsBoss()){
+                    saveCorrelator(result, p.output, 0, traj);
                 }
-                saveCorrelator(result, par.global.output, 0, traj);
-                std::cout << "Boundary condition in T direction is " << p.boundaryT << std::endl;
-                for (unsigned int tLast = 0; tLast < par.global.nt; tLast++)
+                /*std::cout << "Boundary condition in T direction is " << p.boundaryT << std::endl;
+                for (unsigned int t = 0; t < par.global.nt; t++)
                 {
-                    std::cout << tLast << " - " << result.correlator[tLast] << std::endl;
-                }
+		    for (int mu = 0; mu < Ns; mu++)
+                        for (int nu = 0; nu < Ns; nu++)
+                        {
+                            result.correlator[t]()(mu,nu)() *= (1. / translations.size());
+                        }
+                    std::cout << t << " - " << result.correlator[t] << std::endl;
+                }*/
             }
             tAr.stopTimer("Total");
             printTimeProfile(tAr.getTimings(), tAr.getTimer("Total"));
