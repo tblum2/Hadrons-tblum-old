@@ -28,6 +28,7 @@ See the full license in the file "LICENSE" in the top level distribution directo
 #include <Hadrons/Global.hpp>
 #include <Hadrons/A2AMatrix.hpp>
 #include <Hadrons/DiskVector.hpp>
+#include <Hadrons/Module.hpp>
 #include <Hadrons/TimerArray.hpp>
 
 using namespace Grid;
@@ -152,7 +153,7 @@ void saveCorrelator(const FlexibleContractor::CorrelatorResult &result, const st
   {
     fileStem += "_dt_" + std::to_string(dt);
   }
-  filename = dir + "/" + RESULT_FILE_NAME(fileStem, traj);
+  filename = dir + "/" + ModuleBase::resultFilename(fileStem, traj);
   std::cout << "Saving correlator to '" << filename << "'" << std::endl;
   makeFileDir(dir);
   ResultWriter writer(filename);

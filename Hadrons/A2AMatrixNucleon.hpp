@@ -215,23 +215,7 @@ public:
 			nRow_k = a.dimension(3);
 		}
 		
-		// MCA - very basic parallelization for now
-                /*thread_for(mu, Ns,{
-                        thread_for(nu,Ns,{
-                                for (int i = 0; i < nRow_i; i++)
-                                for (int j = 0; j < nRow_j; j++)
-                                for (int k = 0; k < nRow_k; k++)
-                                {
-                                        ComplexD tmp;
-                                        //tmp = a(mu,i,j,k) * std::conj(b(nu,i,j,k))
-                                        //    - a(mu,i,j,k) * std::conj(b(nu,k,j,i));
-                                        tmp = a(mu,i,j,k) * (std::conj(b(nu,i,j,k)) - std::conj(b(nu,k,j,i)));
-                                        spinMat(mu,nu) += tmp;
-                                }
-                        });
-               });*/
-               //for(int mu=0; mu<Ns; mu++) {
-               //thread_for_collapse(5, mu, Ns, {
+	       // MCA - very basic parallelization for now
                thread_for(mu, Ns, {
                    for(int nu=0; nu < Ns; nu++)
                       for (int i = 0; i < nRow_i; i++)
@@ -363,8 +347,6 @@ public:
                                 }
                         });
                 });
-		
-		//std::cout << "DEBUG: Nucleon contraction 1 ended" << std::endl;
 	}
 
 	static void contNuc3ptUpTest()
@@ -619,7 +601,7 @@ public:
                 {
                     acc += tmp;
                 }
-            }
+            });
         }
         else
         {
@@ -634,7 +616,7 @@ public:
                 {
                     acc += tmp;
                 }
-            }
+            });
         }
     }
 
@@ -996,7 +978,7 @@ void A2AMatrixNucIo<T>::load(Vec<VecT> &v, double *tRead)
     
     if (plist.getLayout() == H5D_CHUNKED)
     {
-        isChunked == true;
+        isChunked = true;
         rank_chunk = plist.getChunk(5, chunk_dim);
         std::cout << "Data is chunked with rank " << std::to_string(rank_chunk) << std::endl;
         std::cout << "and chunk dimensions " << std::to_string(chunk_dim[0]) << " " <<
