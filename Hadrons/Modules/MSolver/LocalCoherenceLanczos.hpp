@@ -145,7 +145,7 @@ void TLocalCoherenceLanczos<FImpl, nBasis, FImplIo>::setup(void)
     int  cNm = (par().doCoarse) ? par().coarseParams.Nm : 0;
 
     LOG(Message) << "Coarse grid: " << cg->GlobalDimensions() << std::endl;
-    if(Ls==1) envCreateDerived(BasePack, CoarsePack, getName(), Ls
+    if(Ls==1) envCreateDerived(BasePack, CoarsePack, getName(), Ls,
                                par().fineParams.Nm, cNm, envGetRbGrid(Field), cg,
                                gridIo, gridCoarseIo);
     else      envCreateDerived(BasePack, CoarsePack, getName(), Ls,
