@@ -133,7 +133,8 @@ void TLocalCoherenceLanczos<FImpl, nBasis, FImplIo>::setup(void)
 
     if (typeHash<Field>() != typeHash<FieldIo>())
     {
-        gridIo       = envGetRbGrid(FieldIo,Ls);
+        if(Ls==1) gridIo = envGetRbGrid(FieldIo);
+        else gridIo      = envGetRbGrid(FieldIo,Ls);
     }
     if (typeHash<CoarseField>() != typeHash<CoarseFieldIo>())
     {
@@ -144,16 +145,20 @@ void TLocalCoherenceLanczos<FImpl, nBasis, FImplIo>::setup(void)
     int  cNm = (par().doCoarse) ? par().coarseParams.Nm : 0;
 
     LOG(Message) << "Coarse grid: " << cg->GlobalDimensions() << std::endl;
-    envCreateDerived(BasePack, CoarsePack, getName(), Ls,
-                     par().fineParams.Nm, cNm, envGetRbGrid(Field,Ls), cg,
-                     gridIo, gridCoarseIo);
-
+    if(Ls==1) envCreateDerived(BasePack, CoarsePack, getName(),
+                               par().fineParams.Nm, cNm, envGetRbGrid(Field), cg,
+                               gridIo, gridCoarseIo);
+    else      envCreateDerived(BasePack, CoarsePack, getName(), Ls,
+                               par().fineParams.Nm, cNm, envGetRbGrid(Field,Ls), cg,
+                               gridIo, gridCoarseIo);
     auto &epack = envGetDerived(BasePack, CoarsePack, getName());
 
     envTmp(SchurFMat, "mat", Ls, envGet(FMat, par().action));
     envGetTmp(SchurFMat, mat);
-    envTmp(LCL, "solver", Ls, envGetRbGrid(Field,Ls), cg, mat,
-           Odd, epack.evec, epack.evecCoarse, epack.eval, epack.evalCoarse);
+    if(Ls==1) envTmp(LCL, "solver", envGetRbGrid(Field), cg, mat,
+                     Odd, epack.evec, epack.evecCoarse, epack.eval, epack.evalCoarse);
+    else      envTmp(LCL, "solver", Ls, envGetRbGrid(Field,Ls), cg, mat,
+                     Odd, epack.evec, epack.evecCoarse, epack.eval, epack.evalCoarse);
 }
 
 // execution ///////////////////////////////////////////////////////////////////
