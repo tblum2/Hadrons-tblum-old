@@ -1,6 +1,6 @@
 /*************************************************************************************
 
-Grid physics library, www.github.com/paboyle/Grid 
+Grid physics library, www.github.com/paboyle/Grid
 
 Source file: Hadrons/Modules/MContraction/Meson.hpp
 
@@ -41,14 +41,14 @@ See the full license in the file "LICENSE" in the top level distribution directo
 BEGIN_HADRONS_NAMESPACE
 
 /*
- 
+
  2pt conserved-conserved staggered correlation function
  -----------------------------
- 
+
  * options:
  - q1: input propagator 1 (string) src at y
  - q2: input propagator 2 (string) src at y+hat mu
- 
+
 */
 
 /******************************************************************************
@@ -107,7 +107,7 @@ public:
     void LMA(const FermionField &src, FermionField &guess)
     // copied original from DeflatedGuesser.h
     {
-        
+
       /*guess = Zero();
       assert(evec.size()==eval.size());
       auto N = evec.size();
@@ -137,7 +137,7 @@ template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TStagMesonCCLoopLMA<FImpl1, FImpl2>::getInput(void)
 {
     std::vector<std::string> input = {par().gauge, par().eigenPack, par().action};
-    
+
     return input;
 }
 
@@ -145,7 +145,7 @@ template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TStagMesonCCLoopLMA<FImpl1, FImpl2>::getOutput(void)
 {
     std::vector<std::string> output = {};
-    
+
     return output;
 }
 
@@ -159,18 +159,18 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::setup(void)
     envTmpLat(PropagatorField1, "qshift");
     envTmpLat(FermionField, "source");
     envTmpLat(FermionField, "sol");
-    
+
     // grid can't handle real * prop, so use complex
     envTmpLat(LatticeComplex,  "herm_phase");
     envGetTmp(LatticeComplex, herm_phase);
-    
+
     // sink
     Lattice<iScalar<vInteger> > x(env().getGrid()); LatticeCoordinate(x,0);
     Lattice<iScalar<vInteger> > y(env().getGrid()); LatticeCoordinate(y,1);
     Lattice<iScalar<vInteger> > z(env().getGrid()); LatticeCoordinate(z,2);
     Lattice<iScalar<vInteger> > t(env().getGrid()); LatticeCoordinate(t,3);
     Lattice<iScalar<vInteger> > s(env().getGrid());
-    
+
     //``Hermiticity" phase, (-1)^(x+y)
     // sink only for now
     herm_phase = 1.0;
@@ -183,21 +183,21 @@ template <typename FImpl1, typename FImpl2>
 void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
 {
     typedef DeflatedGuesser<FermionField>  Guesser;
-    
+
     LOG(Message) << "Computing Conserved Current Stag meson contractions using LMA approx " << std::endl;
-    
+
     std::vector<TComplex>  buf;
     Result    result;
     int nt = env().getDim(Tp);
     int ns = env().getDim(Xp);
-    
+
     result.corr.resize(nt);
-    
+
     auto &U = envGet(LatticeGaugeField, par().gauge);
     auto &epack = envGet(BaseFermionEigenPack<FImpl1>, par().eigenPack);
     auto &action = envGet(FermionOperator<FImpl1>, par().action); // for mult by Meo, Moe
     Guesser LMA(epack.evec, epack.eval);
-    
+
     // need another guesser to mult by m/lambda^2;
     double mass = par().mass;
     std::vector<double> movevalsq(epack.eval.size());
@@ -205,18 +205,20 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
         movevalsq[i]=(epack.eval[i]-mass*mass) * epack.eval[i] / mass;
     }
     Guesser LMA2(epack.evec, movevalsq);
-    
+
     envGetTmp(LatticeComplex, corr);
     envGetTmp(LatticeComplex, herm_phase);
     envGetTmp(PropagatorField1, q1);
     envGetTmp(PropagatorField2, q2);
     envGetTmp(PropagatorField1, qshift);
-    
-    // Do spatial gamma's only
+
+    // Do spatial and temporal gammas only
     Lattice<iScalar<vInteger> > x(U.Grid()); LatticeCoordinate(x,0);
     Lattice<iScalar<vInteger> > y(U.Grid()); LatticeCoordinate(y,1);
     Lattice<iScalar<vInteger> > z(U.Grid()); LatticeCoordinate(z,2);
+    Lattice<iScalar<vInteger> > t(U.Grid()); LatticeCoordinate(t,3);
     Lattice<iScalar<vInteger> > lin_z(U.Grid()); lin_z=x+y;
+    Lattice<iScalar<vInteger> > lin_t(U.Grid()); lin_t=x+y+z;
     LatticeComplex phases(U.Grid());
     std::vector<LatticeComplex> localphases(3,U.Grid());
 
@@ -231,9 +233,9 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
     ColourMatrix UmuSrc;
     ColourVector Csrc;
     std::string outFileName;
-    
+
     for(int mu=0;mu<3;mu++){
-        
+
         //staggered phases go into links
         Umu[mu] = PeekIndex<LorentzIndex>(U,mu);
         localphases[mu]=1.0;
@@ -246,23 +248,26 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
         }else if(mu==2){
             localphases[2] = where( mod(z    ,2)==(Integer)0, localphases[2],-localphases[2]);
             phases = where( mod(lin_z,2)==(Integer)0, phases,-phases);
+        }else if(mu==3){
+            localphases[3] = where( mod(t    ,2)==(Integer)0, localphases[3],-localphases[3]);
+            phases = where( mod(lin_t,2)==(Integer)0, phases,-phases);
         }else assert(0);
         Umu[mu] *= phases;
     }
-        
+
     // loop over source position
     // assumed to be Even for now
     for(int t=0; t<nt;t+=par().tinc){
         for(int z=0; z<ns;z+=par().inc){
             for(int y=0; y<ns;y+=par().inc){
                 for(int x=0; x<ns;x+=par().inc){
-                    
+
                     srcSite[0]=x;
                     srcSite[1]=y;
                     srcSite[2]=z;
                     srcSite[3]=t;
                     assert((x+y+z+t)%2==0);// must be Even
-                    
+
                     outFileName = par().output+"/cc_2pt_"+
                         std::to_string(x)+"_"+
                         std::to_string(y)+"_"+
@@ -281,7 +286,7 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
                         std::cout << "Skipping src point " << x << y << z << t << std::endl;
                         continue;
                     }
-                    
+
                     for (unsigned int c = 0; c < FImpl1::Dimension; ++c){
                         source = Zero();
                         Csrc=Zero();
@@ -300,19 +305,19 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
                         sol *= -1.0;
                         FermToProp<FImpl1>(q1, sol, c);
                     }
-                    
+
                     for(int mu=0;mu<3;mu++){
-                        
+
                         srcSite[0]=x;
                         srcSite[1]=y;
                         srcSite[2]=z;
-                        
+
                         LOG(Message) << "StagMesonCCLoopLMA src_xyzt " << srcSite[0] <<" "<< srcSite[1]<<" "<<srcSite[2] <<" "<< srcSite[3] <<" mu "<< mu << std::endl;
-                        
+
                         peekSite(UmuSrc, Umu[mu], srcSite);
-                        
+
                         srcSite[mu]=(srcSite[mu]+1)%ns;
-                        
+
                         for (unsigned int c = 0; c < FImpl1::Dimension; ++c){
                             source = Zero();
                             Csrc=Zero();
@@ -331,7 +336,7 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
                             setCheckerboard(sol,tmp);
                             FermToProp<FImpl1>(q2, sol, c);
                         }
-                        
+
                         qshift = Cshift(q2, mu, 1);
                         corr = trace(adj(qshift) * adj(Umu[mu]) * q1 * UmuSrc);
                         corr += trace(adj(q1) * Umu[mu] * qshift * adj(UmuSrc));
@@ -343,7 +348,7 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
 
                         corr *= herm_phase; // sink
                         if((x+y+z+t)%2)corr *= -1.0; // source
-                        
+
                         sliceSum(corr, buf, Tp);
                         for (unsigned int tsnk = 0; tsnk < buf.size(); ++tsnk){
                             result.corr[tsnk] = TensorRemove(buf[tsnk]);
@@ -355,7 +360,7 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
                             std::to_string(t)+"_mu_"+
                             std::to_string(mu);
                         saveResult(outFileName, "mesonCC", result);
-                        
+
                         // do the local current
                         corr = trace(adj(q1) * q1);
                         // ks phases (includes hermiticity phase)
@@ -363,7 +368,8 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
                         if(      mu==0 && x % 2 )corr *= -1.0; // gamma phase at source
                         else if( mu==1 && y % 2 )corr *= -1.0; // gamma phase at source
                         else if( mu==2 && z % 2 )corr *= -1.0; // gamma phase at source
-                        
+                        else if( mu==3 && t % 2 )corr *= -1.0; // gamma phase at source
+
                         sliceSum(corr, buf, Tp);
                         for (unsigned int tsnk = 0; tsnk < buf.size(); ++tsnk){
                             result.corr[tsnk] = TensorRemove(buf[tsnk]);

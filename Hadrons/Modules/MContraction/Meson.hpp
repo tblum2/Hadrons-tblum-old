@@ -21,7 +21,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Hadrons.  If not, see <http://www.gnu.org/licenses/>.
  *
- * See the full license in the file "LICENSE" in the top level distribution 
+ * See the full license in the file "LICENSE" in the top level distribution
  * directory.
  */
 
@@ -38,14 +38,14 @@
 BEGIN_HADRONS_NAMESPACE
 
 /*
- 
+
  Meson contractions
  -----------------------------
- 
+
  * options:
  - q1: input propagator 1 (string)
  - q2: input propagator 2 (string)
- - gammas: gamma products to insert at sink & source, pairs of gamma matrices 
+ - gammas: gamma products to insert at sink & source, pairs of gamma matrices
            (space-separated strings) in round brackets (i.e. (g_sink g_src)),
            in a sequence (e.g. "(Gamma5 Gamma5)(Gamma5 GammaT)").
 
@@ -166,7 +166,7 @@ void TMeson<FImpl1, FImpl2>::parseGammaString(std::vector<GammaPair> &gammaList)
         {
             for (unsigned int j = 1; j < Gamma::nGamma; j += 2)
             {
-                gammaList.push_back(std::make_pair((Gamma::Algebra)i, 
+                gammaList.push_back(std::make_pair((Gamma::Algebra)i,
                                                    (Gamma::Algebra)j));
             }
         }
@@ -175,7 +175,7 @@ void TMeson<FImpl1, FImpl2>::parseGammaString(std::vector<GammaPair> &gammaList)
     {
         // Parse individual contractions from input string.
         gammaList = strToVec<GammaPair>(par().gammas);
-    } 
+    }
 }
 
 // dependencies/products ///////////////////////////////////////////////////////
@@ -183,7 +183,7 @@ template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TMeson<FImpl1, FImpl2>::getInput(void)
 {
     std::vector<std::string> input = {par().q1, par().q2, par().sink};
-    
+
     return input;
 }
 
@@ -191,7 +191,7 @@ template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TMeson<FImpl1, FImpl2>::getOutput(void)
 {
     std::vector<std::string> output = {};
-    
+
     return output;
 }
 
@@ -199,7 +199,7 @@ template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TMeson<FImpl1, FImpl2>::getOutputFiles(void)
 {
     std::vector<std::string> output = {resultFilename(par().output)};
-    
+
     return output;
 }
 
@@ -220,13 +220,13 @@ void TMeson<FImpl1, FImpl2>::execute(void)
     LOG(Message) << "Computing meson contractions '" << getName() << "' using"
                  << " quarks '" << par().q1 << "' and '" << par().q2 << "'"
                  << std::endl;
-    
+
     std::vector<TComplex>  buf;
     std::vector<Result>    result;
     Gamma                  g5(Gamma::Algebra::Gamma5);
     std::vector<GammaPair> gammaList;
     int                    nt = env().getDim(Tp);
-    
+
     parseGammaString(gammaList);
     result.resize(gammaList.size());
     for (unsigned int i = 0; i < result.size(); ++i)
@@ -240,13 +240,13 @@ void TMeson<FImpl1, FImpl2>::execute(void)
     {
         auto &q1 = envGet(SlicedPropagator1, par().q1);
         auto &q2 = envGet(SlicedPropagator2, par().q2);
-        
+
         LOG(Message) << "(propagator already sinked)" << std::endl;
         for (unsigned int i = 0; i < result.size(); ++i)
         {
             Gamma gSnk(gammaList[i].first);
             Gamma gSrc(gammaList[i].second);
-            
+
             for (unsigned int t = 0; t < nt; ++t)
             {
                 result[i].corr[t] = TensorRemove(trace(mesonConnected(q1[t], q2[t], gSnk, gSrc)));
@@ -257,7 +257,7 @@ void TMeson<FImpl1, FImpl2>::execute(void)
     {
         auto &q1 = envGet(PropagatorField1, par().q1);
         auto &q2 = envGet(PropagatorField2, par().q2);
-        
+
         envGetTmp(LatticeComplex, c);
         LOG(Message) << "(using sink '" << par().sink << "')" << std::endl;
         for (unsigned int i = 0; i < result.size(); ++i)
@@ -265,19 +265,19 @@ void TMeson<FImpl1, FImpl2>::execute(void)
             Gamma       gSnk(gammaList[i].first);
             Gamma       gSrc(gammaList[i].second);
             std::string ns;
-                
+
             ns = vm().getModuleNamespace(env().getObjectModule(par().sink));
             if (ns == "MSource")
             {
                 PropagatorField1 &sink = envGet(PropagatorField1, par().sink);
-                
+
                 c = trace(mesonConnected(q1, q2, gSnk, gSrc)*sink);
                 sliceSum(c, buf, Tp);
             }
             else if (ns == "MSink")
             {
                 SinkFnScalar &sink = envGet(SinkFnScalar, par().sink);
-                
+
                 c   = trace(mesonConnected(q1, q2, gSnk, gSrc));
                 buf = sink(c);
             }
@@ -304,7 +304,7 @@ template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TStagMeson<FImpl1, FImpl2>::getInput(void)
 {
     std::vector<std::string> input = {par().q1, par().q2, par().sink, par().source};
-    
+
     return input;
 }
 
@@ -312,7 +312,7 @@ template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TStagMeson<FImpl1, FImpl2>::getOutput(void)
 {
     std::vector<std::string> output = {};
-    
+
     return output;
 }
 
@@ -320,7 +320,7 @@ template <typename FImpl1, typename FImpl2>
 void TStagMeson<FImpl1, FImpl2>::parseGammaString()
 {
     gammaList.clear();
-    
+
     // Determine gamma matrices to insert at source/sink.
     // only gamma-src = gamma-snk supported for now
     if (par().gammas.compare("all") == 0)
@@ -330,6 +330,7 @@ void TStagMeson<FImpl1, FImpl2>::parseGammaString()
         gammaList.push_back(Gamma::Algebra::GammaX);
         gammaList.push_back(Gamma::Algebra::GammaY);
         gammaList.push_back(Gamma::Algebra::GammaZ);
+        gammaList.push_back(Gamma::Algebra::GammaT);
     }
     else
     {
@@ -351,11 +352,12 @@ void TStagMeson<FImpl1, FImpl2>::setup(void)
            LatticeComplex(env().getGrid()));
     envGetTmp(std::vector<LatticeComplex>,stag_phase_sink);
     stag_phase_source.resize(Ngam);
-    
+
     Lattice<iScalar<vInteger> > x(env().getGrid()); LatticeCoordinate(x,0);
     Lattice<iScalar<vInteger> > y(env().getGrid()); LatticeCoordinate(y,1);
     Lattice<iScalar<vInteger> > z(env().getGrid()); LatticeCoordinate(z,2);
-    
+    Lattice<iScalar<vInteger> > t(env().getGrid()); LatticeCoordinate(t,3);
+
     // coordinate of source
     std::vector<int> src_coor = strToVec<int>(static_cast<MSource::StagPoint *>(vm().getModule(par().source))->par().position);
     // local taste non-singlet ops, including ``Hermiticity" phase,
@@ -364,23 +366,28 @@ void TStagMeson<FImpl1, FImpl2>::setup(void)
 
         stag_phase_sink[i] = 1.0;
         stag_phase_source[i] = 1.0;
-        
+
         LOG(Message) << "Using gamma: " << gammaList[i] << std::endl;
         switch(gammaList[i]) {
-                
+
             case Gamma::Algebra::GammaX  :
                 stag_phase_sink[i] = where( mod(x,2)==(Integer)0, stag_phase_sink[i], -stag_phase_sink[i]);
                 if((src_coor[0])%2) stag_phase_source[i]= -stag_phase_source[i];
                 break;
-                
+
             case Gamma::Algebra::GammaY  :
                 stag_phase_sink[i] = where( mod(y,2)==(Integer)0, stag_phase_sink[i], -stag_phase_sink[i]);
                 if((src_coor[1])%2) stag_phase_source[i]= -stag_phase_source[i];
                 break;
-                
+
             case Gamma::Algebra::GammaZ  :
                 stag_phase_sink[i] = where( mod(z,2)==(Integer)0, stag_phase_sink[i], -stag_phase_sink[i]);
                 if((src_coor[2])%2) stag_phase_source[i] = -stag_phase_source[i];
+                break;
+
+            case Gamma::Algebra::GammaT  :
+                stag_phase_sink[i] = where( mod(t,2)==(Integer)0, stag_phase_sink[i], -stag_phase_sink[i]);
+                if((src_coor[3])%2) stag_phase_source[i] = -stag_phase_source[i];
                 break;
 
             case Gamma::Algebra::Gamma5  :
@@ -403,13 +410,13 @@ void TStagMeson<FImpl1, FImpl2>::execute(void)
     LOG(Message) << "Computing meson contractions '" << getName() << "' using"
     << " quarks '" << par().q1 << "' and '" << par().q2 << "'"
     << std::endl;
-    
+
     std::vector<TComplex>  buf;
     std::vector<Result>    result;
     int                    nt = env().getDim(Tp);
     // staggered gammas
     envGetTmp(std::vector<LatticeComplex>,stag_phase_sink);
-    
+
     result.resize(gammaList.size());
     for (unsigned int i = 0; i < result.size(); ++i)
     {
@@ -427,17 +434,17 @@ void TStagMeson<FImpl1, FImpl2>::execute(void)
     {
         auto &q1 = envGet(PropagatorField1, par().q1);
         auto &q2 = envGet(PropagatorField2, par().q2);
-        
+
         envGetTmp(LatticeComplex, c);
         //envGetTmp(LatticeComplex, phase);
-        
+
         //LOG(Message) << "(source position '" << location << "')" << std::endl;
-        
+
         LOG(Message) << "(using sink '" << par().sink << "')" << std::endl;
         for (unsigned int i = 0; i < result.size(); ++i)
         {
             std::string ns;
-            
+
             ns = vm().getModuleNamespace(env().getObjectModule(par().sink));
             if (ns == "MSource")
             {

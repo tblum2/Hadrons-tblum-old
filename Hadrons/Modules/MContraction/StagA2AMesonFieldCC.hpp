@@ -1,6 +1,6 @@
 /*************************************************************************************
 
-Grid physics library, www.github.com/paboyle/Grid 
+Grid physics library, www.github.com/paboyle/Grid
 
 Source file: Hadrons/Modules/MContraction/StagA2AMesonFieldCC.hpp
 
@@ -89,7 +89,7 @@ public:
     }
 
     virtual ~StagMesonFieldCCKernel(void) = default;
-    
+
     void operator()(A2AMatrixSet<T> &m,
                             int mu,
                             const LatticeColourMatrix &Umu,
@@ -107,7 +107,7 @@ public:
        //unimplemented
         assert(0);
     }
-    
+
     virtual double flops(const unsigned int blockSizei, const unsigned int blockSizej)
     {
         // updated for staggered
@@ -133,8 +133,8 @@ class TStagA2AMesonFieldCC : public Module<StagA2AMesonFieldCCPar>
 {
 public:
     FERM_TYPE_ALIASES(FImpl,);
-    typedef A2AMatrixBlockComputation<Complex, 
-                                      FermionField, 
+    typedef A2AMatrixBlockComputation<Complex,
+                                      FermionField,
                                       StagA2AMesonFieldCCMetadata,
                                       HADRONS_A2AM_IO_TYPE> Computation;
     typedef StagMesonFieldCCKernel<Complex, FImpl> Kernel;
@@ -198,7 +198,7 @@ void TStagA2AMesonFieldCC<FImpl>::setup(void)
     {
         gamma_ = {
             Gamma::Algebra::Gamma5,
-            Gamma::Algebra::Identity,    
+            Gamma::Algebra::Identity,
             Gamma::Algebra::GammaX,
             Gamma::Algebra::GammaY,
             Gamma::Algebra::GammaZ,
@@ -226,18 +226,18 @@ void TStagA2AMesonFieldCC<FImpl>::setup(void)
         if (p.size() != env().getNd() - 1)
         {
             HADRONS_ERROR(Size, "Momentum has " + std::to_string(p.size())
-                                + " components instead of " 
+                                + " components instead of "
                                 + std::to_string(env().getNd() - 1));
         }
         mom_.push_back(p);
     }
-    envCache(std::vector<ComplexField>, momphName_, 1, 
+    envCache(std::vector<ComplexField>, momphName_, 1,
              par().mom.size(), envGetGrid(ComplexField));
     //printMem("StagMesonFieldCC setup(): after envCache ", env().getGrid()->ThisRank());
     envTmpLat(ComplexField, "coor");
     //printMem("StagMesonFieldCC setup(): after envTmpLat ", env().getGrid()->ThisRank());
-    envTmp(Computation, "computation", 1, envGetGrid(FermionField), 
-           env().getNd() - 1, mom_.size(), gamma_.size(), par().block, 
+    envTmp(Computation, "computation", 1, envGetGrid(FermionField),
+           env().getNd() - 1, mom_.size(), gamma_.size(), par().block,
            par().cacheBlock, this);
     //printMem("StagMesonFieldCC setup() End ", env().getGrid()->ThisRank());
 }
@@ -252,7 +252,7 @@ void TStagA2AMesonFieldCC<FImpl>::execute(void)
     int N_i        = epack.evec.size();
     //auto &right = envGet(std::vector<FermionField>, par().left);// same as left
     int N_j        = epack.evec.size();
-    
+
     auto &U = envGet(LatticeGaugeField, par().gauge);
     int nt         = env().getDim().back();
     int ngamma     = gamma_.size();
@@ -260,7 +260,7 @@ void TStagA2AMesonFieldCC<FImpl>::execute(void)
     int nmom       = mom_.size();
     int block      = par().block;
     int cacheBlock = par().cacheBlock;
-    
+
     LOG(Message) << "Computing all-to-all meson fields" << std::endl;
     LOG(Message) << "Left and right: '" << par().eigenPack << "'" << std::endl;
     LOG(Message) << "Momenta:" << std::endl;
@@ -276,51 +276,52 @@ void TStagA2AMesonFieldCC<FImpl>::execute(void)
     LOG(Message) << "Meson field chunk size: " << nt << "*" << 2*N_i << "*" << 2*N_j
     << " (filesize " << sizeString(nt*2*N_i*2*N_j*sizeof(HADRONS_A2AM_IO_TYPE))
     << "/momentum/bilinear)" << std::endl;
-    
+
     auto &ph = envGet(std::vector<ComplexField>, momphName_);
-        
+
     auto ionameFn = [this](const unsigned int m, const unsigned int g)
     {
         std::stringstream ss;
-        
+
         ss << gamma_[g] << "_";
         for (unsigned int mu = 0; mu < mom_[m].size(); ++mu)
         {
             ss << mom_[m][mu] << ((mu == mom_[m].size() - 1) ? "" : "_");
         }
-        
+
         return ss.str();
     };
-    
+
     auto filenameFn = [this, &ionameFn](const unsigned int m, const unsigned int g)
     {
         return par().output + "." + std::to_string(vm().getTrajectory())
         + "/" + ionameFn(m, g) + ".h5";
     };
-    
+
     auto metadataFn = [this](const unsigned int m, const unsigned int g)
     {
         StagA2AMesonFieldCCMetadata md;
-        
+
         for (auto pmu: mom_[m])
         {
             md.momentum.push_back(pmu);
         }
         md.gamma = gamma_[g];
-        
+
         return md;
     };
-    
-    // Staggered Phases. Do spatial gamma's only
+
+    // Staggered Phases. Do spatial and temporal gamma only
     Lattice<iScalar<vInteger> > x(U.Grid()); LatticeCoordinate(x,0);
     Lattice<iScalar<vInteger> > y(U.Grid()); LatticeCoordinate(y,1);
     Lattice<iScalar<vInteger> > z(U.Grid()); LatticeCoordinate(z,2);
     Lattice<iScalar<vInteger> > t(U.Grid()); LatticeCoordinate(t,3);
     Lattice<iScalar<vInteger> > lin_z(U.Grid()); lin_z=x+y;
+    Lattice<iScalar<vInteger> > lin_t(U.Grid()); lin_t=x+y+z;
     Lattice<iScalar<vInteger> > sum(U.Grid()); sum=lin_z+z+t;
     ph[0] = 1.0;
     ph[0] = where( mod(sum,2)==(Integer)0, ph[0],-ph[0]);
-    
+
     ComplexField phases(U.Grid());
     phases=1.0;
     int mu;
@@ -331,14 +332,17 @@ void TStagA2AMesonFieldCC<FImpl>::execute(void)
     } else if(gamma_[0]==Gamma::Algebra::GammaZ){
         mu=2;
         phases = where( mod(lin_z,2)==(Integer)0, phases,-phases);
+    } else if(gamma_[0]==Gamma::Algebra::GammaT){
+        mu=3;
+        phases = where( mod(lin_t,2)==(Integer)0, phases,-phases);
     } else assert(0);
-    
+
     LatticeColourMatrix Umu(U.Grid());
     Umu = PeekIndex<LorentzIndex>(U,mu);
     Umu *= phases;
-    
+
     Kernel      kernel(gamma_, ph, envGetGrid(FermionField));
-    
+
     envGetTmp(Computation, computation);
     computation.execute(mu, Umu, epack.evec, epack.evec, kernel,
                         ionameFn, filenameFn, metadataFn);
