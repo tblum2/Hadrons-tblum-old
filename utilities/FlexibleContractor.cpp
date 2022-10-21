@@ -153,6 +153,7 @@ void saveCorrelator(const FlexibleContractor::CorrelatorResult &result, const st
   {
     fileStem += "_dt_" + std::to_string(dt);
   }
+  //filename = dir + "/" + RESULT_FILE_NAME(fileStem, traj);
   filename = dir + "/" + ModuleBase::resultFilename(fileStem, traj);
   std::cout << "Saving correlator to '" << filename << "'" << std::endl;
   makeFileDir(dir);
@@ -440,7 +441,9 @@ int main(int argc, char* argv[])
 	    prod = prod0;
 	    for (unsigned int j = terms.size() - nlast ; j < terms.size() - 1 ; ++j) {
 	      tAr.startTimer("Disk vector overhead");
-	      const A2AMatrix<ComplexD> &ref = a2aMat.at(terms[j].term)[TIME_MOD(t[j] + tLast)];
+	      unsigned int tidx = TIME_MOD(t[j]);
+	      if ( terms[j].tdps ) tidx = TIME_MOD(t[j] + tLast);
+	      const A2AMatrix<ComplexD> &ref = a2aMat.at(terms[j].term)[tidx];
 	      tAr.stopTimer("Disk vector overhead");
 
 	      tAr.startTimer("A*B total rest");
