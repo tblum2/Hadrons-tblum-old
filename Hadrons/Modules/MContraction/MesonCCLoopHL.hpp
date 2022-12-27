@@ -32,6 +32,7 @@ See the full license in the file "LICENSE" in the top level distribution directo
 #ifndef Hadrons_MContraction_MesonLoopCCHL_hpp_
 #define Hadrons_MContraction_MesonLoopCCHL_hpp_
 
+#include <Hadrons/A2AVectors.hpp>
 #include <Hadrons/EigenPack.hpp>
 #include <Hadrons/Global.hpp>
 #include <Hadrons/Module.hpp>
@@ -41,19 +42,8 @@ See the full license in the file "LICENSE" in the top level distribution directo
 
 BEGIN_HADRONS_NAMESPACE
 
-/*
-
- 2pt conserved-conserved staggered correlation function
- -----------------------------
-
- * options:
- - q1: input propagator 1 (string) src at y
- - q2: input propagator 2 (string) src at y+hat mu
-
-*/
-
 /******************************************************************************
- *                                TMesonLoopCCHL                                    *
+ *             TMesonLoopCCHL                                    *
  ******************************************************************************/
 BEGIN_MODULE_NAMESPACE(MContraction)
 
@@ -77,12 +67,14 @@ class TStagMesonLoopCCHL: public Module<MesonLoopCCHLPar>
 {
 public:
     typedef typename FImpl1::FermionField FermionField;
-    typedef TStagA2AVectors::A2AVectorsSchurStaggered<FImpl1> A2A;
-    FERM_TYPE_ALIASES(FImpl1, 1);
-    FERM_TYPE_ALIASES(FImpl2, 2);
+    typedef A2AVectorsSchurStaggered<FImpl1> A2A;
+    typedef FermionOperator<FImpl1>          FMat;
+    FERM_TYPE_ALIASES(FImpl1,1);
+    FERM_TYPE_ALIASES(FImpl2,2);
     SOLVER_TYPE_ALIASES(FImpl1,);
-    BASIC_TYPE_ALIASES(ScalarImplCR, Scalar);
-    SINK_TYPE_ALIASES(Scalar);
+    //BASIC_TYPE_ALIASES(FImpl1,);
+    //BASIC_TYPE_ALIASES(ScalarImplCR, Scalar);
+    //SINK_TYPE_ALIASES(Scalar);
     class Result: Serializable
     {
     public:
@@ -107,7 +99,8 @@ public:
       return (stat (name.c_str(), &buffer) == 0);
     }
 private:
-    Solver       *solver_{nullptr};
+    //FMat         *action_{nullptr};
+    //Solver       *solver_{nullptr};
 };
 
 MODULE_REGISTER_TMP(StagMesonLoopCCHL, ARG(TStagMesonLoopCCHL<STAGIMPL, STAGIMPL>), MContraction);
@@ -168,6 +161,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
     herm_phase = where( mod(s,2)==(Integer)0, herm_phase, -herm_phase);
     //printMem("MesonLoopCCHL setup() end", env().getGrid()->ThisRank());
     
+    bool        hasLowModes = (!par().eigenPack.empty());
     std::string sub_string  = (hasLowModes) ? "_subtract" : "";
     auto        &action     = envGet(FMat, par().action);
     auto        &solver     = envGet(Solver, par().solver + sub_string);
@@ -192,7 +186,6 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 
     auto &U       = envGet(LatticeGaugeField, par().gauge);
     auto &solver  = envGet(Solver, par().solver);
-    auto &mat     = solver.getFMat();
     auto &epack   = envGet(BaseFermionEigenPack<FImpl1>, par().eigenPack);
     double mass = par().mass;
     
@@ -273,8 +266,8 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 //                            continue;
 //                }
 
-                //source = 1.;
-                source = where(t == ts, v, 0.);
+                source = v;
+                source = where((t == ts), source, source*0.);
                 sol = Zero();
                 solver(sol, source);
                 //FermToProp<FImpl1>(q1, sol, c);
