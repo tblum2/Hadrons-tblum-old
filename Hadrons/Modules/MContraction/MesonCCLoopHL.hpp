@@ -66,6 +66,7 @@ public:
                                     std::string, output,
                                     std::string, eigenPack,
                                     std::string, solver,
+                                    double, mass,
                                     int, inc,
                                     int, tinc);
 };
@@ -75,6 +76,7 @@ class TStagMesonLoopCCHL: public Module<MesonLoopCCHLPar>
 {
 public:
     typedef typename FImpl1::FermionField FermionField;
+    typedef A2AVectorsSchurStaggered<FImpl1> A2A;
     FERM_TYPE_ALIASES(FImpl1, 1);
     FERM_TYPE_ALIASES(FImpl2, 2);
     SOLVER_TYPE_ALIASES(FImpl1,);
@@ -145,6 +147,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
     envTmpLat(PropagatorField1, "qshift");
     envTmpLat(FermionField, "source");
     envTmpLat(FermionField, "sol");
+    envTmpLat(FermionField, "v");
 
     // grid can't handle real * prop, so use complex
     envTmpLat(LatticeComplex,  "herm_phase");
@@ -163,6 +166,9 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
     s=x+y+z+t;
     herm_phase = where( mod(s,2)==(Integer)0, herm_phase, -herm_phase);
     //printMem("MesonLoopCCHL setup() end", env().getGrid()->ThisRank());
+    
+    envTmp(A2A, "a2a", 1, action, solver);
+    
 }
 
 // execution ///////////////////////////////////////////////////////////////////
@@ -184,13 +190,15 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     auto &solver  = envGet(Solver, par().solver);
     auto &mat     = solver.getFMat();
     auto &epack   = envGet(BaseFermionEigenPack<FImpl1>, par().eigenPack);
-
+    double mass = par().mass;
+    
     envGetTmp(LatticeComplex, corr);
     envGetTmp(LatticeComplex, herm_phase);
     envGetTmp(PropagatorField1, q1);
     envGetTmp(PropagatorField2, q2);
     envGetTmp(PropagatorField1, qshift);
-
+    envGetTmp(A2A, a2a);
+    
     // Do spatial and temporal gammas only
     Lattice<iScalar<vInteger> > x(U.Grid()); LatticeCoordinate(x,0);
     Lattice<iScalar<vInteger> > y(U.Grid()); LatticeCoordinate(y,1);
@@ -204,6 +212,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     std::vector<LatticeColourMatrix> Umu(3,U.Grid());
     envGetTmp(FermionField, source);
     envGetTmp(FermionField, sol);
+    envGetTmp(FermionField, v);
     Coordinate srcSite;
     ColourMatrix UmuSrc;
     std::string outFileName;
@@ -229,6 +238,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
         Umu[mu] *= phases;
     }
 
+    int Nl_ = epack.evec.size();
     for (unsigned int il = 0; il < Nl_; il++)
     {
         // eval of unpreconditioned Dirac op
