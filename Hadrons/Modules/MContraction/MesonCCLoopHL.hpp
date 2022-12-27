@@ -66,6 +66,7 @@ public:
                                     std::string, output,
                                     std::string, eigenPack,
                                     std::string, solver,
+                                    std::string, action,
                                     double, mass,
                                     int, inc,
                                     int, tinc);
@@ -76,7 +77,7 @@ class TStagMesonLoopCCHL: public Module<MesonLoopCCHLPar>
 {
 public:
     typedef typename FImpl1::FermionField FermionField;
-    typedef A2AVectorsSchurStaggered<FImpl1> A2A;
+    typedef TStagA2AVectors::A2AVectorsSchurStaggered<FImpl1> A2A;
     FERM_TYPE_ALIASES(FImpl1, 1);
     FERM_TYPE_ALIASES(FImpl2, 2);
     SOLVER_TYPE_ALIASES(FImpl1,);
@@ -167,6 +168,9 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
     herm_phase = where( mod(s,2)==(Integer)0, herm_phase, -herm_phase);
     //printMem("MesonLoopCCHL setup() end", env().getGrid()->ThisRank());
     
+    std::string sub_string  = (hasLowModes) ? "_subtract" : "";
+    auto        &action     = envGet(FMat, par().action);
+    auto        &solver     = envGet(Solver, par().solver + sub_string);
     envTmp(A2A, "a2a", 1, action, solver);
     
 }
