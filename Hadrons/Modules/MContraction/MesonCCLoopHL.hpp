@@ -58,7 +58,6 @@ public:
                                     std::string, solver,
                                     std::string, action,
                                     double, mass,
-                                    int, inc,
                                     int, tinc);
 };
 
