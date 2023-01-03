@@ -117,7 +117,7 @@ TStagMesonLoopCCHL<FImpl1, FImpl2>::TStagMesonLoopCCHL(const std::string name)
 template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TStagMesonLoopCCHL<FImpl1, FImpl2>::getInput(void)
 {
-    std::vector<std::string> input = {par().gauge, par().solver, par().eigenPack};
+    std::vector<std::string> input = {par().gauge, par().solver, par().eigenPack, par().action};
 
     return input;
 }
