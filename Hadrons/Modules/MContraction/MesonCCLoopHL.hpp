@@ -117,8 +117,12 @@ TStagMesonLoopCCHL<FImpl1, FImpl2>::TStagMesonLoopCCHL(const std::string name)
 template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TStagMesonLoopCCHL<FImpl1, FImpl2>::getInput(void)
 {
-    std::vector<std::string> input = {par().gauge, par().solver, par().eigenPack, par().action};
-
+    std::vector<std::string> input = {par().gauge, par().action};
+    std::string sub_string;
+    
+    input.push_back(par().eigenPack);
+    input.push_back(par().solver + "subtract");
+    
     return input;
 }
 
@@ -135,9 +139,6 @@ template <typename FImpl1, typename FImpl2>
 void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
 {
     envTmpLat(LatticeComplex, "corr");
-    envTmpLat(PropagatorField1, "q1");
-    envTmpLat(PropagatorField2, "q2");
-    envTmpLat(PropagatorField1, "qshift");
     envTmpLat(FermionField, "source");
     envTmpLat(FermionField, "sol");
     envTmpLat(FermionField, "v");
@@ -160,10 +161,8 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
     herm_phase = where( mod(s,2)==(Integer)0, herm_phase, -herm_phase);
     //printMem("MesonLoopCCHL setup() end", env().getGrid()->ThisRank());
     
-    bool        hasLowModes = (!par().eigenPack.empty());
-    std::string sub_string  = (hasLowModes) ? "_subtract" : "";
     auto        &action     = envGet(FMat, par().action);
-    auto        &solver     = envGet(Solver, par().solver + sub_string);
+    auto        &solver     = envGet(Solver, par().solver + "_subtract");
     envTmp(A2A, "a2a", 1, action, solver);
     
 }
@@ -184,15 +183,13 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     result.corr.resize(nt);
 
     auto &U       = envGet(LatticeGaugeField, par().gauge);
-    auto &solver  = envGet(Solver, par().solver);
+    auto        &action    = envGet(FMat, par().action);
+    auto        &solver    = envGet(Solver, par().solver + "_subtract");
     auto &epack   = envGet(BaseFermionEigenPack<FImpl1>, par().eigenPack);
     double mass = par().mass;
     
     envGetTmp(LatticeComplex, corr);
     envGetTmp(LatticeComplex, herm_phase);
-    envGetTmp(PropagatorField1, q1);
-    envGetTmp(PropagatorField2, q2);
-    envGetTmp(PropagatorField1, qshift);
     envGetTmp(A2A, a2a);
     
     // Do spatial and temporal gammas only

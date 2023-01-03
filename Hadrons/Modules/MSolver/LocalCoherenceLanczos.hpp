@@ -58,7 +58,7 @@ class TLocalCoherenceLanczos: public Module<LocalCoherenceLanczosPar>
 {
 public:
     FERM_TYPE_ALIASES(FImpl,);
-    typedef LocalCoherenceLanczos<typename FImpl::SiteSpinor, 
+    typedef Grid::LocalCoherenceLanczos<typename FImpl::SiteSpinor, 
                                   typename FImpl::SiteComplex, 
                                   nBasis>                  LCL;
     typedef BaseFermionEigenPack<FImpl>                    BasePack;
