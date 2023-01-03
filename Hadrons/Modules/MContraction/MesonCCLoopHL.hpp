@@ -121,7 +121,7 @@ std::vector<std::string> TStagMesonLoopCCHL<FImpl1, FImpl2>::getInput(void)
     std::string sub_string;
     
     input.push_back(par().eigenPack);
-    input.push_back(par().solver + "subtract");
+    input.push_back(par().solver + "_subtract");
     
     return input;
 }
