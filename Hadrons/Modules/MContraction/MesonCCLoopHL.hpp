@@ -247,7 +247,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
             // loop over source time slices
             for(int ts=0; ts<nt;ts+=par().tinc){
                 
-                LOG(Message) << "StagMesonLoopCCHLHL src_t " << srcSite[3] << std::endl;
+                LOG(Message) << "StagMesonLoopCCHLHL src_t " << ts << std::endl;
 
 
 //                outFileName = par().output+"/cc_2pt_"+std::to_string(t)+"_mu_";
