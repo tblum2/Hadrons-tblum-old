@@ -237,10 +237,11 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
         // eval of unpreconditioned Dirac op
         std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
         
-        LOG(Message) << "V vector i = " << 2*il << ", " << 2*il+1 << " (low modes)" << std::endl;
-        
+                
         for (unsigned int eo = 0; eo < 2; eo++)
         {
+            LOG(Message) << "Vector " << 2*il+eo << std::endl;
+
             // construct full lattice evec
             a2a.makeLowModeV(v, epack.evec[il], eval, eo);
     
