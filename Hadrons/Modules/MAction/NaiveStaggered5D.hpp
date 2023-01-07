@@ -77,7 +77,7 @@ protected:
 
 MODULE_REGISTER_TMP(NaiveStaggered5D, TNaiveStaggered5D<STAGIMPL>, MAction);
 #ifdef GRID_DEFAULT_PRECISION_DOUBLE
-MODULE_REGISTER_TMP(NaiveStaggered5D, TNaiveStaggered5D<STAGIMPLF>, MAction);
+MODULE_REGISTER_TMP(NaiveStaggered5DF, TNaiveStaggered5D<STAGIMPLF>, MAction);
 #endif
 
 /******************************************************************************
