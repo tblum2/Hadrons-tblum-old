@@ -179,7 +179,9 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     Result    result;
     int nt = env().getDim(Tp);
     int ns = env().getDim(Xp);
-
+    int Ls = env().getObjectLs(par().action);
+    std::cout << "Ls=" << Ls << std::endl;
+    
     result.corr.resize(nt);
 
     auto &U       = envGet(LatticeGaugeField, par().gauge);
