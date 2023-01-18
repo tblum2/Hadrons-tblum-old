@@ -139,8 +139,9 @@ void TRBPrecCG<FImpl, nBasis>::setup(void)
                                      const FermionField &source) {
             ConjugateGradient<FermionField> cg(par().residual,
                                                par().maxIteration);
-            HADRONS_DEFAULT_SCHUR_SOLVE<FermionField> schurSolver(cg);
-            schurSolver.subtractGuess(subGuess);
+            //HADRONS_DEFAULT_SCHUR_SOLVE<FermionField> schurSolver(cg);
+            //schurSolver.subtractGuess(subGuess);
+            HADRONS_DEFAULT_SCHUR_SOLVE<FermionField> schurSolver(cg,subGuess,true);
             schurSolver(mat, source, sol, *guesserPt);
         };
     };

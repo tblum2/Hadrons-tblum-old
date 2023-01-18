@@ -120,7 +120,7 @@ void TNaiveStaggered5D<FImpl>::setup(void)
     auto &gridRb5 = *envGetRbGrid(FermionField, par().Ls);
     typename NaiveStaggeredFermion5D<FImpl>::ImplParams implParams;
     
-    envCreateDerived(FMat, NaiveStaggeredFermion5D<FImpl>, getName(),
+    envCreateDerived(FMat, NaiveStaggeredFermion5D<FImpl>, getName(), par().Ls,
                      U,
                      grid5, gridRb5,
                      grid, gridRb,

@@ -39,6 +39,7 @@ See the full license in the file "LICENSE" in the top level distribution directo
 #include <Hadrons/ModuleFactory.hpp>
 #include <Hadrons/Modules/MSource/Point.hpp>
 #include <Hadrons/Solver.hpp>
+#include <Grid/lattice/Lattice_reduction.h>
 
 BEGIN_HADRONS_NAMESPACE
 
@@ -56,7 +57,9 @@ public:
                                     std::string, output,
                                     std::string, eigenPack,
                                     std::string, solver,
+                                    std::string, solver5D,
                                     std::string, action,
+                                    std::string, action5D,
                                     double, mass,
                                     int, tinc);
 };
@@ -117,11 +120,13 @@ TStagMesonLoopCCHL<FImpl1, FImpl2>::TStagMesonLoopCCHL(const std::string name)
 template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TStagMesonLoopCCHL<FImpl1, FImpl2>::getInput(void)
 {
-    std::vector<std::string> input = {par().gauge, par().action};
+    std::vector<std::string> input = {par().gauge, par().action, par().action5D};
     std::string sub_string;
     
     input.push_back(par().eigenPack);
-    input.push_back(par().solver + "_subtract");
+    //input.push_back(par().solver + "_subtract");
+    input.push_back(par().solver);
+    input.push_back(par().solver5D);
     
     return input;
 }
@@ -138,11 +143,6 @@ std::vector<std::string> TStagMesonLoopCCHL<FImpl1, FImpl2>::getOutput(void)
 template <typename FImpl1, typename FImpl2>
 void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
 {
-    envTmpLat(LatticeComplex, "corr");
-    envTmpLat(FermionField, "source");
-    envTmpLat(FermionField, "sol");
-    envTmpLat(FermionField, "v");
-
     // grid can't handle real * prop, so use complex
     envTmpLat(LatticeComplex,  "herm_phase");
     envGetTmp(LatticeComplex, herm_phase);
@@ -162,8 +162,17 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
     //printMem("MesonLoopCCHL setup() end", env().getGrid()->ThisRank());
     
     auto        &action     = envGet(FMat, par().action);
-    auto        &solver     = envGet(Solver, par().solver + "_subtract");
+    //auto        &solver     = envGet(Solver, par().solver + "_subtract");
+    auto        &solver     = envGet(Solver, par().solver);
+    auto        &solver5D     = envGet(Solver, par().solver5D);
     envTmp(A2A, "a2a", 1, action, solver);
+    
+    auto Ls = env().getObjectLs(par().action5D);
+    envTmpLat(LatticeComplex, "corr");
+    envTmpLat(FermionField, "source",Ls);
+    envTmpLat(FermionField, "tmp",Ls);
+    envTmpLat(FermionField, "sol",Ls);
+    envTmpLat(FermionField, "v");
     
 }
 
@@ -179,16 +188,20 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     Result    result;
     int nt = env().getDim(Tp);
     int ns = env().getDim(Xp);
-    int Ls = env().getObjectLs(par().action);
-    std::cout << "Ls=" << Ls << std::endl;
     
     result.corr.resize(nt);
 
     auto &U       = envGet(LatticeGaugeField, par().gauge);
-    auto        &action    = envGet(FMat, par().action);
-    auto        &solver    = envGet(Solver, par().solver + "_subtract");
+    auto        &action      = envGet(FMat, par().action);
+    auto        &action5D    = envGet(FMat, par().action5D);
+    //auto        &solver    = envGet(Solver, par().solver + "_subtract");
+    auto        &solver5D    = envGet(Solver, par().solver5D);
     auto &epack   = envGet(BaseFermionEigenPack<FImpl1>, par().eigenPack);
     double mass = par().mass;
+    auto Ls = env().getObjectLs(par().action5D);
+    LOG(Message) << "Ls=" << Ls << std::endl;
+    typedef DeflatedGuesser<FermionField>  Guesser;
+    Guesser LMA(epack.evec, epack.eval);
     
     envGetTmp(LatticeComplex, corr);
     envGetTmp(LatticeComplex, herm_phase);
@@ -205,9 +218,18 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     std::vector<LatticeComplex> localphases(3,U.Grid());
 
     std::vector<LatticeColourMatrix> Umu(3,U.Grid());
+    // 5d source, solution
     envGetTmp(FermionField, source);
+    envGetTmp(FermionField, tmp);
     envGetTmp(FermionField, sol);
     envGetTmp(FermionField, v);
+    Lattice<iScalar<vInteger> > t5d(source.Grid()); LatticeCoordinate(t5d,4);
+    FermionField tmp_e(env().getRbGrid());
+    FermionField tmp_o(env().getRbGrid());
+    FermionField tmpRB(env().getRbGrid());
+    FermionField tmpRB2(env().getRbGrid());
+    FermionField sol4d(env().getGrid());
+    
     Coordinate srcSite;
     ColourMatrix UmuSrc;
     std::string outFileName;
@@ -234,23 +256,28 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     }
 
     int Nl_ = epack.evec.size();
-    for (unsigned int il = 0; il < Nl_; il++)
+    for (unsigned int il = 0; il < Nl_; il+=Ls/2)
     {
-        // eval of unpreconditioned Dirac op
-        std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
-        
-                
-        for (unsigned int eo = 0; eo < 2; eo++)
-        {
-            LOG(Message) << "Vector " << 2*il+eo << std::endl;
-
-            // construct full lattice evec
-            a2a.makeLowModeV(v, epack.evec[il], eval, eo);
-    
-            // loop over source time slices
-            for(int ts=0; ts<nt;ts+=par().tinc){
-                
-                LOG(Message) << "StagMesonLoopCCHLHL src_t " << ts << std::endl;
+        LOG(Message) << "Vector block " << il << std::endl;
+        // prepare 5d source of evecs
+        source = 0.0;
+        sol = 0.0;
+        int s=0;
+        for(int iv=il;iv<il+Ls/2;iv++){
+            // abs(eval) of unpreconditioned Dirac op
+            std::complex<double> eval(mass,sqrt(epack.eval[iv]-mass*mass));
+            // plus/minus evecs
+            for(int pm=0;pm<2;pm++){
+                // construct full lattice evec/eval as 4d source
+                a2a.makeLowModeV(v, epack.evec[iv], eval, pm);
+                InsertSlice(v,source,s,0);
+                s++;
+            }
+        }
+        // loop over source time slices
+        for(int ts=0; ts<nt;ts+=par().tinc){
+            
+            LOG(Message) << "StagMesonLoopCCHLHL src_t " << ts << std::endl;
 
 
 //                outFileName = par().output+"/cc_2pt_"+std::to_string(t)+"_mu_";
@@ -264,13 +291,34 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 //                    std::cout << "Skipping src point " << x << y << z << t << std::endl;
 //                            continue;
 //                }
-
-                source = v;
-                source = where((t == ts), source, source*0.);
-                sol = Zero();
-                solver(sol, source);
-                //FermToProp<FImpl1>(q1, sol, c);
-            
+            // source only on desired time slice
+            tmp = where((t5d == ts), source, source*0.);
+            // now low-mode solution on source as initial guess sol
+            for(int s=0;s<Ls;s++){
+                ExtractSlice(sol4d,tmp,s,0);
+/////////////////////////// from RedBlackSource in Grid: /////////////////////////////////////////////////////////////
+                pickCheckerboard(Even,tmp_e,sol4d);
+                pickCheckerboard(Odd ,tmp_o,sol4d);
+                /////////////////////////////////////////////////////
+                // src_o = (source_o - Moe MeeInv source_e)
+                /////////////////////////////////////////////////////
+                action.MooeeInv(tmp_e,tmpRB);     assert( tmpRB.Checkerboard() ==Even);
+                action.Meooe   (tmpRB,tmpRB2);    assert( tmpRB2.Checkerboard() ==Odd);
+                tmpRB2=tmp_o-tmpRB2;              assert( tmpRB2.Checkerboard() ==Odd);
+                action.Mooee(tmpRB2,tmp_o);
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                // now hit with low-mode prop (guess)
+                LMA(tmp_o, tmpRB);
+                setCheckerboard(sol4d,tmpRB);
+                // zero out even part
+                tmpRB2.Checkerboard()=Even;
+                tmpRB2=0.;
+                setCheckerboard(sol4d,tmpRB2);
+                InsertSlice(sol4d,sol,s,0);
+            }
+            solver5D(sol, tmp);
+            //FermToProp<FImpl1>(q1, sol, c);
+        
 
 //                for(int mu=0;mu<3;mu++){
 //
@@ -337,7 +385,6 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 //                          std::to_string(z)+"_"+
 //                          std::to_string(t);
 //                saveResult(outFileName, "mesonLL", result);
-            }
         }
     }
 }

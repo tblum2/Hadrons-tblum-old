@@ -49,7 +49,6 @@ public:
                                     double     , mass,
                                     double     , c1,
                                     double     , tad,
-                                    int        , Ls,
                                     std::string, boundary,
                                     std::string, string,
                                     std::string, twist);
@@ -118,7 +117,7 @@ void TNaiveStaggered<FImpl>::setup(void)
     auto &gridRb = *envGetRbGrid(FermionField);
     typename NaiveStaggeredFermion<FImpl>::ImplParams implParams;
     
-    envCreateDerived(FMat, NaiveStaggeredFermion<FImpl>, getName(), par().Ls,
+    envCreateDerived(FMat, NaiveStaggeredFermion<FImpl>, getName(), 1,
                      U,
                      grid, gridRb,
                      par().mass, par().c1, par().tad, implParams);
