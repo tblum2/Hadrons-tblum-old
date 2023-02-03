@@ -29,4 +29,4 @@ using namespace Grid;
 using namespace Hadrons;
 using namespace MIO;
 
-//template class Grid::Hadrons::MIO::TLoadDistilNoise<FIMPL>;
+template class Grid::Hadrons::MIO::TLoadDistilNoise<FIMPL>;
