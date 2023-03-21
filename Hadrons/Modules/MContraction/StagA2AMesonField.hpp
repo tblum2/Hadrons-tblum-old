@@ -104,16 +104,29 @@ public:
     }
     void operator()(A2AMatrixSet<T> &m,
                     int mu,
+                    FermionOperator<FImpl> &Dns,
+                    //LatticeGaugeField &U,
                     const LatticeColourMatrix &Umu,
-                    const LatticeComplex &srcPtGrid,
-                    const FermionField *left,
-                    const FermionField *right,
-                    const unsigned int orthogDim,
-                    double &t)
+                    const FermionField *evec,
+                    const Real *eval,
+                    //const Real mass,
+                    const unsigned int orthogDim, double &time)
     {
-        //unimplemented
+        //unimplemented (for Staggered conserved current)
         assert(0);
     }
+//    void operator()(A2AMatrixSet<T> &m,
+//                    int mu,
+//                    const LatticeColourMatrix &Umu,
+//                    const LatticeComplex &srcPtGrid,
+//                    const FermionField *left,
+//                    const FermionField *right,
+//                    const unsigned int orthogDim,
+//                    double &t)
+//    {
+//        //unimplemented
+//        assert(0);
+//    }
     
     virtual double flops(const unsigned int blockSizei, const unsigned int blockSizej)
     {

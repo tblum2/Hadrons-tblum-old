@@ -2,7 +2,7 @@
 
 Grid physics library, www.github.com/paboyle/Grid
 
-Source file: Hadrons/Modules/MContraction/StagA2AMesonFieldCC.hpp
+Source file: Hadrons/Modules/MContraction/StagA2AMesonFieldCCHalfMem.hpp
 
 Copyright (C) 2015-2019
 
@@ -27,13 +27,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 See the full license in the file "LICENSE" in the top level distribution directory
 *************************************************************************************/
 /*  END LEGAL */
-#ifndef Hadrons_MContraction_StagA2AMesonFieldCC_hpp_
-#define Hadrons_MContraction_StagA2AMesonFieldCC_hpp_
+#ifndef Hadrons_MContraction_StagA2AMesonFieldCCHalfMem_hpp_
+#define Hadrons_MContraction_StagA2AMesonFieldCCHalfMem_hpp_
 
 #include <Hadrons/Global.hpp>
 #include <Hadrons/Module.hpp>
 #include <Hadrons/ModuleFactory.hpp>
 #include <Hadrons/A2AMatrix.hpp>
+#include <Hadrons/A2AVectors.hpp>
 #include <Hadrons/EigenPack.hpp>
 //#include <Hadrons/utils_memory.h>
 
@@ -44,39 +45,37 @@ BEGIN_HADRONS_NAMESPACE
  ******************************************************************************/
 BEGIN_MODULE_NAMESPACE(MContraction)
 
-class StagA2AMesonFieldCCPar: Serializable
+class StagA2AMesonFieldCCHalfMemPar: Serializable
 {
 public:
-    GRID_SERIALIZABLE_CLASS_MEMBERS(StagA2AMesonFieldCCPar,
+    GRID_SERIALIZABLE_CLASS_MEMBERS(StagA2AMesonFieldCCHalfMemPar,
                                     int, cacheBlock,
                                     int, block,
-                                    //int, Size,
-                                    //int, istart,
-                                    //int, jstart,
+                                    int, checkerboard,
                                     std::string, gauge,
-                                    //std::string, left,
-                                    //std::string, right,
+                                    std::string, action,
                                     std::string, eigenPack,
                                     std::string, output,
                                     std::string, gammas,
-                                    std::vector<std::string>, mom);
+                                    std::vector<std::string>, mom,
+                                    double, mass);
 };
 
-class StagA2AMesonFieldCCMetadata: Serializable
+class StagA2AMesonFieldCCHalfMemMetadata: Serializable
 {
 public:
-    GRID_SERIALIZABLE_CLASS_MEMBERS(StagA2AMesonFieldCCMetadata,
+    GRID_SERIALIZABLE_CLASS_MEMBERS(StagA2AMesonFieldCCHalfMemMetadata,
                                     std::vector<RealF>, momentum,
                                     Gamma::Algebra, gamma);
 };
 
 template <typename T, typename FImpl>
-class StagMesonFieldCCKernel: public A2AKernel<T, typename FImpl::FermionField>
+class StagMesonFieldCCHalfMemKernel: public A2AKernel<T, typename FImpl::FermionField>
 {
 public:
     typedef typename FImpl::FermionField FermionField;
 public:
-    StagMesonFieldCCKernel(const std::vector<Gamma::Algebra> &gamma,
+    StagMesonFieldCCHalfMemKernel(const std::vector<Gamma::Algebra> &gamma,
                            const std::vector<LatticeComplex> &mom,
                            GridBase *grid)
     : gamma_(gamma), mom_(mom), grid_(grid)
@@ -88,8 +87,21 @@ public:
         }
     }
 
-    virtual ~StagMesonFieldCCKernel(void) = default;
+    virtual ~StagMesonFieldCCHalfMemKernel(void) = default;
 
+    void operator()(A2AMatrixSet<T> &m,
+                    int mu,
+                    //LatticeGaugeField &U,
+                    FermionOperator<FImpl> &Dns,
+                    const LatticeColourMatrix &Umu,
+                    const FermionField *evec,
+                    const Real *eval,
+                    //const Real mass,
+                    const unsigned int orthogDim,
+                    double &t)
+    {
+        A2Autils<FImpl>::StagMesonFieldCCHalfMem(m, mu, Dns, Umu, evec, eval, orthogDim, &t);
+    }
     void operator()(A2AMatrixSet<T> &m,
                             int mu,
                             const LatticeColourMatrix &Umu,
@@ -98,7 +110,8 @@ public:
                             const unsigned int orthogDim,
                             double &t)
     {
-        A2Autils<FImpl>::StagMesonFieldCC(m, mu, Umu, left, right, gamma_, mom_, orthogDim, &t);
+        //unimplemented
+        assert(0);
     }
     void operator()(A2AMatrixSet<T> &m, const FermionField *left,
                     const FermionField *right,
@@ -107,19 +120,7 @@ public:
        //unimplemented
         assert(0);
     }
-    void operator()(A2AMatrixSet<T> &m,
-                    int mu,
-                    FermionOperator<FImpl> &Dns,
-                    //LatticeGaugeField &U,
-                    const LatticeColourMatrix &Umu,
-                    const FermionField *evec,
-                    const Real *eval,
-                    //const Real mass,
-                    const unsigned int orthogDim, double &time)
-    {
-        //unimplemented (for Staggered conserved current)
-        assert(0);
-    }
+
     virtual double flops(const unsigned int blockSizei, const unsigned int blockSizej)
     {
         // updated for staggered
@@ -141,20 +142,20 @@ private:
 };
 
 template <typename FImpl>
-class TStagA2AMesonFieldCC : public Module<StagA2AMesonFieldCCPar>
+class TStagA2AMesonFieldCCHalfMem : public Module<StagA2AMesonFieldCCHalfMemPar>
 {
 public:
     FERM_TYPE_ALIASES(FImpl,);
     typedef A2AMatrixBlockComputation<Complex,
                                       FermionField,
-                                      StagA2AMesonFieldCCMetadata,
+                                      StagA2AMesonFieldCCHalfMemMetadata,
                                       HADRONS_A2AM_IO_TYPE> Computation;
-    typedef StagMesonFieldCCKernel<Complex, FImpl> Kernel;
+    typedef StagMesonFieldCCHalfMemKernel<Complex, FImpl> Kernel;
 public:
     // constructor
-    TStagA2AMesonFieldCC(const std::string name);
+    TStagA2AMesonFieldCCHalfMem(const std::string name);
     // destructor
-    virtual ~TStagA2AMesonFieldCC(void){};
+    virtual ~TStagA2AMesonFieldCCHalfMem(void){};
     // dependency relation
     virtual std::vector<std::string> getInput(void);
     virtual std::vector<std::string> getOutput(void);
@@ -169,30 +170,30 @@ private:
     std::vector<std::vector<Real>>     mom_;
 };
 
-MODULE_REGISTER(StagA2AMesonFieldCC, ARG(TStagA2AMesonFieldCC<STAGIMPL>), MContraction);
+MODULE_REGISTER(StagA2AMesonFieldCCHalfMem, ARG(TStagA2AMesonFieldCCHalfMem<STAGIMPL>), MContraction);
 
 /******************************************************************************
-*                  TStagA2AMesonFieldCC implementation                             *
+*                  TStagA2AMesonFieldCCHalfMem implementation                             *
 ******************************************************************************/
 // constructor /////////////////////////////////////////////////////////////////
 template <typename FImpl>
-TStagA2AMesonFieldCC<FImpl>::TStagA2AMesonFieldCC(const std::string name)
-: Module<StagA2AMesonFieldCCPar>(name)
+TStagA2AMesonFieldCCHalfMem<FImpl>::TStagA2AMesonFieldCCHalfMem(const std::string name)
+: Module<StagA2AMesonFieldCCHalfMemPar>(name)
 , momphName_(name + "_momph")
 {
 }
 
 // dependencies/products ///////////////////////////////////////////////////////
 template <typename FImpl>
-std::vector<std::string> TStagA2AMesonFieldCC<FImpl>::getInput(void)
+std::vector<std::string> TStagA2AMesonFieldCCHalfMem<FImpl>::getInput(void)
 {
-    std::vector<std::string> in = {par().gauge, par().eigenPack};
+    std::vector<std::string> in = {par().gauge, par().eigenPack, par().action};
 
     return in;
 }
 
 template <typename FImpl>
-std::vector<std::string> TStagA2AMesonFieldCC<FImpl>::getOutput(void)
+std::vector<std::string> TStagA2AMesonFieldCCHalfMem<FImpl>::getOutput(void)
 {
     std::vector<std::string> out = {};
 
@@ -201,7 +202,7 @@ std::vector<std::string> TStagA2AMesonFieldCC<FImpl>::getOutput(void)
 
 // setup ///////////////////////////////////////////////////////////////////////
 template <typename FImpl>
-void TStagA2AMesonFieldCC<FImpl>::setup(void)
+void TStagA2AMesonFieldCCHalfMem<FImpl>::setup(void)
 {
     //printMem("Begin StagMesonFieldCC setup() ", env().getGrid()->ThisRank());
     gamma_.clear();
@@ -245,33 +246,34 @@ void TStagA2AMesonFieldCC<FImpl>::setup(void)
     }
     envCache(std::vector<ComplexField>, momphName_, 1,
              par().mom.size(), envGetGrid(ComplexField));
-    //printMem("StagMesonFieldCC setup(): after envCache ", env().getGrid()->ThisRank());
     envTmpLat(ComplexField, "coor");
     //printMem("StagMesonFieldCC setup(): after envTmpLat ", env().getGrid()->ThisRank());
     envTmp(Computation, "computation", 1, envGetGrid(FermionField),
            env().getNd() - 1, mom_.size(), gamma_.size(), par().block,
            par().cacheBlock, this);
-    //printMem("StagMesonFieldCC setup() End ", env().getGrid()->ThisRank());
 }
 
 
 // execution ///////////////////////////////////////////////////////////////////
 template <typename FImpl>
-void TStagA2AMesonFieldCC<FImpl>::execute(void)
+void TStagA2AMesonFieldCCHalfMem<FImpl>::execute(void)
 {
     auto &epack  = envGet(BaseFermionEigenPack<FImpl>, par().eigenPack);
-    //auto &left  = envGet(std::vector<FermionField>, par().left);
-    int N_i        = epack.evec.size();
-    //auto &right = envGet(std::vector<FermionField>, par().left);// same as left
-    int N_j        = epack.evec.size();
+    int N        = epack.evec.size();
+    // set checkerboard of evecs
+    for(int j=0; j<N; j++)
+      epack.evec[j].Checkerboard()=par().checkerboard;
 
     auto &U = envGet(LatticeGaugeField, par().gauge);
+    auto &Dns = envGet(FMat, par().action);
+    
     int nt         = env().getDim().back();
     int ngamma     = gamma_.size();
     assert(ngamma==1);// do one at a time
     int nmom       = mom_.size();
     int block      = par().block;
     int cacheBlock = par().cacheBlock;
+    double mass = par().mass;
 
     LOG(Message) << "Computing all-to-all meson fields" << std::endl;
     LOG(Message) << "Left and right: '" << par().eigenPack << "'" << std::endl;
@@ -285,8 +287,8 @@ void TStagA2AMesonFieldCC<FImpl>::execute(void)
     {
         LOG(Message) << "  " << g << std::endl;
     }
-    LOG(Message) << "Meson field chunk size: " << nt << "*" << 2*N_i << "*" << 2*N_j
-    << " (filesize " << sizeString(nt*2*N_i*2*N_j*sizeof(HADRONS_A2AM_IO_TYPE))
+    LOG(Message) << "Meson field chunk size: " << nt << "*" << N << "*" << N
+    << " (filesize " << sizeString(nt*N*N*sizeof(HADRONS_A2AM_IO_TYPE))
     << "/momentum/bilinear)" << std::endl;
 
     auto &ph = envGet(std::vector<ComplexField>, momphName_);
@@ -312,7 +314,7 @@ void TStagA2AMesonFieldCC<FImpl>::execute(void)
 
     auto metadataFn = [this](const unsigned int m, const unsigned int g)
     {
-        StagA2AMesonFieldCCMetadata md;
+        StagA2AMesonFieldCCHalfMemMetadata md;
 
         for (auto pmu: mom_[m])
         {
@@ -352,16 +354,42 @@ void TStagA2AMesonFieldCC<FImpl>::execute(void)
     LatticeColourMatrix Umu(U.Grid());
     Umu = PeekIndex<LorentzIndex>(U,mu);
     Umu *= phases;
+    std::vector<Real> eval(epack.eval.size());
+    
+    for (unsigned int i = 0; i < N; i++)
+    {
+        // imag. part of eval of unpreconditioned Dirac op
+        // needed to recontruct even from odd and vs.
+        eval[i]=sqrt(epack.eval[i]-mass*mass);
+    }
 
     Kernel      kernel(gamma_, ph, envGetGrid(FermionField));
 
     envGetTmp(Computation, computation);
-    computation.execute(mu, Umu, epack.evec, epack.evec, kernel,
+    computation.execute(mu, Dns, Umu, epack.evec, eval, kernel,
                         ionameFn, filenameFn, metadataFn);
+    
+    // save +eval
+    std::vector<complex<double>> ev(N);
+    for (unsigned int i = 0; i < N; i++)
+    {
+        ev[i] = complex<double>(mass,eval[i]);
+    }
+    
+    if ( env().getGrid()->IsBoss() ) {
+        LOG(Message)<<"Saving evals "<<std::endl;
+        std::string eval_filename = par().output + "." + std::to_string(vm().getTrajectory()) + "/evals.h5";
+        A2AVectorsIo::initEvalFile(eval_filename,
+                               ev.size());// total size
+        A2AVectorsIo::saveEvalBlock(eval_filename,
+                                    ev.data(),
+                                    0,// start of chunk
+                                    N);// size of chunk saved
+    }
 }
 
 END_MODULE_NAMESPACE
 
 END_HADRONS_NAMESPACE
 
-#endif // Hadrons_MContraction_StagA2AMesonFieldCC_hpp_
+#endif // Hadrons_MContraction_StagA2AMesonFieldCCHalfMem_hpp_

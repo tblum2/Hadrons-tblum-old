@@ -661,7 +661,7 @@ void A2AVectorsIo::initEvalFile(const std::string eval_filename,
 #ifdef HAVE_HDF5
     
     try{
-        H5::H5File file(eval_filename, H5F_ACC_EXCL);
+        H5::H5File file(eval_filename, H5F_ACC_TRUNC);
     
         // Create the data space for the dataset.
         hsize_t dims[1];               // dataset dimensions

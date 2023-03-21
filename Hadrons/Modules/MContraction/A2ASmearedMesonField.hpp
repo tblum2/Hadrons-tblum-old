@@ -96,6 +96,19 @@ public:
         //unimplemented (for Staggered conserved current)
         assert(0);
     }
+    void operator()(A2AMatrixSet<T> &m,
+                    int mu,
+                    FermionOperator<STAGIMPL> &Dns,
+                    //LatticeGaugeField &U,
+                    const LatticeColourMatrix &Umu,
+                    const FermionField *evec,
+                    const Real *eval,
+                    //const Real mass,
+                    const unsigned int orthogDim, double &time)
+    {
+        //unimplemented (for Staggered conserved current)
+        assert(0);
+    }
     virtual double flops(const unsigned int blockSizei, const unsigned int blockSizej)
     {
         return vol_*(2*8.0+6.0+8.0*mom_.size())*blockSizei*blockSizej*gamma_.size();

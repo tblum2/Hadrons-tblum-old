@@ -465,7 +465,7 @@ int main(int argc, char* argv[])
                         thread_for(j,ref.dimension(2),{
                             for (unsigned int i = 0; i < ref.dimension(1); ++i)
                             {
-                                lastTerm[t]((unsigned long long)mu, i, j, k) = ref((unsigned long long)mu, i, j, k);
+                                lastTerm[t]((long)mu,(long)i,(long)j,(long)k) = ref((long)mu,(long)i,(long)j,(long)k);
                             }
                         });
                     });
@@ -530,7 +530,7 @@ int main(int argc, char* argv[])
                             thread_for(j,ref.dimension(2),{
                                 for (unsigned int i = 0; i < ref.dimension(1); ++i)
                                 {
-                                    tenW(mu, i, j, k) = ref(mu, i, j, k);
+                                    tenW((long)mu, (long)i, (long)j, (long)k) = ref((long)mu, (long)i, (long)j, (long)k);
                                 }
                             });
                         });

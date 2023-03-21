@@ -78,9 +78,19 @@ public:
                           const unsigned int orthogDim, double &time) = 0;
     virtual void operator()(A2AMatrixSet<T> &m,
                             int mu,
+                            //const LatticeGaugeField &U,
                             const LatticeColourMatrix &Umu,
                             const Field *left,
                             const Field *right,
+                            const unsigned int orthogDim, double &time) = 0;
+    virtual void operator()(A2AMatrixSet<T> &m,
+                            int mu,
+                            //LatticeGaugeField &U,
+                            FermionOperator<STAGIMPL> &Dns,
+                            const LatticeColourMatrix &Umu,
+                            const Field *evec,
+                            const Real *eval,
+                            //const Real mass,
                             const unsigned int orthogDim, double &time) = 0;
     virtual double flops(const unsigned int blockSizei, const unsigned int blockSizej) = 0;
     virtual double bytes(const unsigned int blockSizei, const unsigned int blockSizej) = 0;
@@ -162,6 +172,18 @@ public:
                  const FilenameFn &ionameFn,
                  const FilenameFn &filenameFn,
                  const MetadataFn &metadataFn);
+    // for Staggered Conserved Current using even or odd evecs
+    void execute(int mu,
+                 //LatticeGaugeField &U,
+                 FermionOperator<STAGIMPL> &Dns,
+                 const LatticeColourMatrix Umu,
+                 const std::vector<Field> &evec,
+                 const std::vector<Real> &eval,
+                 //const Real mass,
+                 A2AKernel<T, Field> &kernel,
+                 const FilenameFn &ionameFn,
+                 const FilenameFn &filenameFn,
+                 const MetadataFn &metadataFn);
 private:
     // I/O handler
     void saveBlock(const A2AMatrixSet<TIo> &m, IoHelper &h);
@@ -238,23 +260,75 @@ public:
                        C tmp;
                        ComplexD reval = eval(r);
 
+                       // sum_i (a(r,i)/eval(r)) (b(i,r)/eval(i))
                        avec = a.row(r);
                        bvec = b.col(r);
                        tmpv = avec.cwiseProduct(bvec.cwiseProduct(eval));
                        tmp  = tmpv.sum()*reval;
                        
+                       // sum_i (a(r,i)eval(r)) (b(r,i)eval^*(i))^\dagger
                        tmpv = b.row(r).conjugate();
                        bvec = tmpv.cwiseProduct(eval);
                        tmpv = avec.cwiseProduct(bvec);
                        tmp += tmpv.sum()*reval;
 
+                       // sum_i (a(i,r)eval^*(r))^\dagger (b(r,i)eval^*(i))^\dagger
                        avec = a.col(r).conjugate();
                        tmpv = avec.cwiseProduct(bvec);
                        tmp += tmpv.sum()*reval;
 
+                       // sum_i (a(r,i)* eval^*(r))^\dagger (b(i,r)eval(i))
                        bvec = b.col(r);
                        tmpv = avec.cwiseProduct(bvec.cwiseProduct(eval));
                        tmp += tmpv.sum()*reval;
+                       
+                       thread_critical
+                       {
+                           acc += tmp;
+                       }
+                   });
+    }
+    
+    // accTrMul(acc, a, b, eval1,eval2): acc += tr(a*b) / eval_a / eval_b
+    template <typename C, typename MatLeft, typename MatRight, typename Eval>
+    static inline void accTrMul(C &acc,
+                                const MatLeft &a,
+                                const MatRight &b,
+                                const Eval &ev_a,
+                                const Eval &ev_b)
+    {
+        int vsize = a.cols();
+        
+        thread_for(r,vsize,
+                   {
+                       Eigen::VectorXcd tmpv(vsize);
+                       Eigen::VectorXcd avec(vsize);
+                       Eigen::VectorXcd bvec(vsize);
+                       C tmp;
+                       ComplexD eval_r = ev_a(r);
+                       // note, evals were loaded as 1/eval
+
+                       // sum_i (a(r,i)/ev_a(r)) (b(i,r)/ev_b(i))
+                       avec = a.row(r);
+                       bvec = b.col(r);
+                       tmpv = avec.cwiseProduct(bvec.cwiseProduct(ev_b));
+                       tmp  = tmpv.sum()*eval_r;
+                       
+                       // sum_i (a(r,i)eval(r)) (b(r,i)eval^*(i))^\dagger
+//                       tmpv = b.row(r).conjugate();
+//                       bvec = tmpv.cwiseProduct(eval);
+//                       tmpv = avec.cwiseProduct(bvec);
+//                       tmp += tmpv.sum()*reval;
+//
+//                       // sum_i (a(i,r)eval^*(r))^\dagger (b(r,i)eval^*(i))^\dagger
+//                       avec = a.col(r).conjugate();
+//                       tmpv = avec.cwiseProduct(bvec);
+//                       tmp += tmpv.sum()*reval;
+//
+//                       // sum_i (a(r,i)* eval^*(r))^\dagger (b(i,r)eval(i))
+//                       bvec = b.col(r);
+//                       tmpv = avec.cwiseProduct(bvec.cwiseProduct(eval));
+//                       tmp += tmpv.sum()*reval;
                        
                        thread_critical
                        {
@@ -968,6 +1042,148 @@ void A2AMatrixBlockComputation<T, Field, MetadataType, TIo>
                     });
                     STOP_TIMER("cache copy");
                 }
+            
+            // perf
+            LOG(Message) << "Kernel perf " << flops/t_kernel/1.0e3/nodes
+            << " Gflop/s/node " << std::endl;
+            LOG(Message) << "Kernel perf " << bytes/t_kernel*1.0e6/1024/1024/1024/nodes
+            << " GB/s/node "  << std::endl;
+            
+            // IO
+            double       blockSize, ioTime;
+            unsigned int myRank = grid_->ThisRank(), nRank  = grid_->RankCount();
+            
+            LOG(Message) << "Writing block to disk" << std::endl;
+            ioTime = -GET_TIMER("IO: write block");
+            START_TIMER("IO: total");
+            makeFileDir(filenameFn(0, 0), grid_);
+#ifdef HADRONS_A2AM_PARALLEL_IO
+            grid_->Barrier();
+            // make task list for current node
+            nodeIo_.clear();
+            for(int f = myRank; f < next_*nstr_; f += nRank)
+            {
+                IoHelper h;
+                
+                h.i  = i;
+                h.j  = j;
+                h.e  = f/nstr_;
+                h.s  = f % nstr_;
+                h.io = A2AMatrixIo<TIo>(filenameFn(h.e, h.s),
+                                        ionameFn(h.e, h.s), nt_, N_i, N_j);
+                h.md = metadataFn(h.e, h.s);
+                nodeIo_.push_back(h);
+            }
+            // parallel IO
+            for (auto &h: nodeIo_)
+            {
+                saveBlock(mBlock, h);
+            }
+            grid_->Barrier();
+#else
+            // serial IO, for testing purposes only
+            for(int e = 0; e < next_; e++)
+                for(int s = 0; s < nstr_; s++)
+                {
+                    IoHelper h;
+                    
+                    h.i  = i;
+                    h.j  = j;
+                    h.e  = e;
+                    h.s  = s;
+                    h.io = A2AMatrixIo<TIo>(filenameFn(h.e, h.s),
+                                            ionameFn(h.e, h.s), nt_, N_i, N_j);
+                    h.md = metadataFn(h.e, h.s);
+                    saveBlock(mfBlock, h);
+                }
+#endif
+            STOP_TIMER("IO: total");
+            blockSize  = static_cast<double>(next_*nstr_*nt_*N_ii*N_jj*sizeof(TIo));
+            ioTime    += GET_TIMER("IO: write block");
+            LOG(Message) << "HDF5 IO done " << sizeString(blockSize) << " in "
+            << ioTime  << " us ("
+            << blockSize/ioTime*1.0e6/1024/1024
+            << " MB/s)" << std::endl;
+        }
+}
+
+// execution ///////////////////////////////////////////////////////////////////
+template <typename T, typename Field, typename MetadataType, typename TIo>
+void A2AMatrixBlockComputation<T, Field, MetadataType, TIo>
+::execute(int mu,
+          //LatticeGaugeField &U,
+          FermionOperator<STAGIMPL> &Dns,
+          const LatticeColourMatrix Umu,
+          const std::vector<Field> &evec,
+          const std::vector<Real> &eval,
+          //const Real mass,
+          A2AKernel<T, Field> &kernel,
+          const FilenameFn &ionameFn,
+          const FilenameFn &filenameFn,
+          const MetadataFn &metadataFn)
+{
+    //////////////////////////////////////////////////////////////////////////
+    // i,j   is first  loop over blockSize_ factors
+    // ii,jj is second loop over cacheBlockSize_ factors for high perf contractions
+    // iii,jjj are loops within cacheBlock
+    // Total index is sum of these  i+ii+iii etc...
+    //////////////////////////////////////////////////////////////////////////
+    // only positive lambda vectors explicitly computed
+    int    N_i = evec.size();
+    int    N_j = evec.size();
+    double flops, bytes, t_kernel;
+    double nodes = grid_->NodeCount();
+    
+    int NBlock_i = N_i/blockSize_ + (((N_i % blockSize_) != 0) ? 1 : 0);
+    int NBlock_j = N_j/blockSize_ + (((N_j % blockSize_) != 0) ? 1 : 0);
+    
+    for(int i=0;i<N_i;i+=blockSize_)
+        for(int j=0;j<N_j;j+=blockSize_)
+        {
+            // Get the W and V vectors for this block^2 set of terms
+            int N_ii = MIN(N_i-i,blockSize_);
+            int N_jj = MIN(N_j-j,blockSize_);
+            A2AMatrixSet<TIo> mBlock(mBuf_.data(), next_, nstr_, nt_, N_ii, N_jj);
+            
+            LOG(Message) << "All-to-all matrix block "
+            << j/blockSize_ + NBlock_j*i/blockSize_ + 1
+            << "/" << NBlock_i*NBlock_j << " [" << i <<" .. "
+            << i+N_ii-1 << ", " << j <<" .. " << j+N_jj-1 << "]"
+            << std::endl;
+            // Series of cache blocked chunks of the contractions within this block
+            flops    = 0.0;
+            bytes    = 0.0;
+            t_kernel = 0.0;
+            for(int ii=0;ii<N_ii;ii+=cacheBlockSize_)
+            {
+                for(int jj=0;jj<N_jj;jj+=cacheBlockSize_)
+                {
+                    double t;
+                    int N_iii = MIN(N_ii-ii,cacheBlockSize_);
+                    int N_jjj = MIN(N_jj-jj,cacheBlockSize_);
+                    A2AMatrixSet<T> mCacheBlock(mCache_.data(), next_, nstr_, nt_, N_iii, N_jjj);
+                    
+                    START_TIMER("kernel");
+                    // only have the positve vectors
+                    kernel(mCacheBlock, mu, Dns, Umu, &evec[(i+ii)], &eval[(j+jj)], orthogDim_, t);
+                    STOP_TIMER("kernel");
+                    t_kernel += t;
+                    flops    += kernel.flops(N_iii, N_jjj);
+                    bytes    += kernel.bytes(N_iii, N_jjj);
+                    
+                    START_TIMER("cache copy");
+                    thread_for_collapse( 5,e,next_,{
+                        for(int s =0;s< nstr_;s++)
+                            for(int t =0;t< nt_;t++)
+                                for(int iii=0;iii< N_iii;iii++)
+                                    for(int jjj=0;jjj< N_jjj;jjj++)
+                                    {
+                                        mBlock(e,s,t,ii+iii,jj+jjj) = mCacheBlock(e,s,t,iii,jjj);
+                                    }
+                    });
+                    STOP_TIMER("cache copy");
+                }
+            }
             
             // perf
             LOG(Message) << "Kernel perf " << flops/t_kernel/1.0e3/nodes

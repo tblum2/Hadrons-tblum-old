@@ -7,6 +7,7 @@ bin_PROGRAMS = \
   HadronsNucContractor       \
   HadronsNucContractorMPI    \
   HadronsContractorCCMPI     \
+  HadronsContractorCCMPIHalfMem \
   HadronsContractorBenchmark \
   HadronsXmlRun              \
   HadronsXmlValidate         \
@@ -33,6 +34,9 @@ HadronsNucContractor_LDADD   = -lHadrons -lGrid
 
 HadronsContractorCCMPI_SOURCES = ContractorCCMPI.cpp
 HadronsContractorCCMPI_LDADD   = -lHadrons -lGrid
+
+HadronsContractorCCMPIHalfMem_SOURCES = ContractorCCMPIHalfMem.cpp
+HadronsContractorCCMPIHalfMem_LDADD   = -lHadrons -lGrid
 
 HadronsNucContractorMPI_SOURCES = ContractorNucMPI.cpp
 HadronsNucContractorMPI_LDADD   = -lHadrons -lGrid

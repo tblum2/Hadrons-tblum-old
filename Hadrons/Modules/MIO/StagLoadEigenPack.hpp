@@ -181,7 +181,7 @@ void TStagLoadEigenPack<Pack, GImpl, FImpl>::execute(void)
     
     ComplexD minusI(0, -1.0);
     ComplexD cc;
-    Real eval;
+    RealD eval;
     double mass = par().mass;
     Field temp(epack.evec[0].Grid());
     
@@ -189,11 +189,14 @@ void TStagLoadEigenPack<Pack, GImpl, FImpl>::execute(void)
         for (unsigned int i = 0; i < par().size; i++)
         {
             eval=sqrt(epack.eval[i]-mass*mass);
+            epack.evec[i].Checkerboard() = Odd;
             action.Meooe(epack.evec[i], temp);
             cc = minusI/eval;
-            epack.evec[i] = cc * temp;
-            epack.evec[i].Checkerboard() = Even;
+            epack.evec[i] = cc * temp; // now it's even!
         }
+    } else {
+        for (unsigned int i = 0; i < par().size; i++)
+            epack.evec[i].Checkerboard() = Odd;
     }
 
     if (!par().gaugeXform.empty())
@@ -226,9 +229,6 @@ void TStagLoadEigenPack<Pack, GImpl, FImpl>::execute(void)
         }
         stopTimer("Transform application");
     }
-    // kill dummy with extreme prejudice
-    //std::vector<double>().swap(dummy);
-    //printMem("StagLoadEigenPack::execute(): END", env().getGrid()->ThisRank());
 }
 
 END_MODULE_NAMESPACE
