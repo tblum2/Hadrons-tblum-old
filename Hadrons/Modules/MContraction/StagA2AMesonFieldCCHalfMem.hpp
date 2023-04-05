@@ -333,8 +333,8 @@ void TStagA2AMesonFieldCCHalfMem<FImpl>::execute(void)
     Lattice<iScalar<vInteger> > lin_z(U.Grid()); lin_z=x+y;
     Lattice<iScalar<vInteger> > lin_t(U.Grid()); lin_t=x+y+z;
     Lattice<iScalar<vInteger> > sum(U.Grid()); sum=lin_z+z+t;
-    ph[0] = 1.0;
-    ph[0] = where( mod(sum,2)==(Integer)0, ph[0],-ph[0]);
+    //ph[0] = 1.0;
+    //ph[0] = where( mod(sum,2)==(Integer)0, ph[0],-ph[0]);
 
     ComplexField phases(U.Grid());
     phases=1.0;
