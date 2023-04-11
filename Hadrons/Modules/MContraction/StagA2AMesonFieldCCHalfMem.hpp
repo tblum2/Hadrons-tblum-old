@@ -290,6 +290,7 @@ void TStagA2AMesonFieldCCHalfMem<FImpl>::execute(void)
     LOG(Message) << "Meson field chunk size: " << nt << "*" << N << "*" << N
     << " (filesize " << sizeString(nt*N*N*sizeof(HADRONS_A2AM_IO_TYPE))
     << "/momentum/bilinear)" << std::endl;
+    LOG(Message) << "Meson field checkerboard: " << par().checkerboard << std::endl;
 
     auto &ph = envGet(std::vector<ComplexField>, momphName_);
 
