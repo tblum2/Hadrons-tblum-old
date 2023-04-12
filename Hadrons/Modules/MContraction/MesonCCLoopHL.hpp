@@ -168,14 +168,12 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
     envTmp(A2A, "a2a", 1, action, solver);
     
     auto Ls = env().getObjectLs(par().action5D);
-    envTmpLat(LatticeComplex, "corr");
     envTmpLat(FermionField, "source",Ls);
     envTmpLat(FermionField, "sourceshift",Ls);
     envTmpLat(FermionField, "tmp",Ls);
     envTmpLat(FermionField, "tmp2",Ls);
     envTmpLat(FermionField, "sol",Ls);
     envTmpLat(FermionField, "solshift",Ls);
-    envTmpLat(FermionField, "sol2",Ls);
     envTmpLat(FermionField, "v");
     
 }
@@ -189,11 +187,18 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     //printMem("MesonLoopCCHL execute() ", env().getGrid()->ThisRank());
 
     std::vector<TComplex>  buf;
-    Result    result;
+    std::vector<Result> result(3);
     int nt = env().getDim(Tp);
     int ns = env().getDim(Xp);
     
-    result.corr.resize(nt);
+    
+    
+    for(int mu=0;mu<3;mu++){
+        result[mu].corr.resize(nt);
+        for(int t=0;t<nt;t++){
+            result[mu].corr[t]=0.;
+        }
+    }
 
     auto &U       = envGet(LatticeGaugeField, par().gauge);
     auto        &action      = envGet(FMat, par().action);
@@ -207,7 +212,6 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     typedef DeflatedGuesser<FermionField>  Guesser;
     Guesser LMA(epack.evec, epack.eval);
     
-    envGetTmp(LatticeComplex, corr);
     envGetTmp(LatticeComplex, herm_phase);
     envGetTmp(A2A, a2a);
     
@@ -229,7 +233,6 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     envGetTmp(FermionField, tmp2);
     envGetTmp(FermionField, sol);
     envGetTmp(FermionField, solshift);
-    envGetTmp(FermionField, sol2);
     envGetTmp(FermionField, v);
     Lattice<iScalar<vInteger> > t5d(source.Grid()); LatticeCoordinate(t5d,4);
     FermionField tmp_e(env().getRbGrid());
@@ -237,10 +240,20 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     FermionField tmpRB(env().getRbGrid());
     FermionField tmpRB2(env().getRbGrid());
     FermionField sol4d(env().getGrid());
-    
-    Coordinate srcSite;
+    // make 4d grid from Ls plus 3 spatial dimensions
+    Coordinate latt(4);
+    latt[0]=Ls;
+    for(int i=1;i<4;i++)latt[i]=ns;
+    Coordinate simd_layout(4);
+    for(int i=0;i<4;i++)simd_layout[i]=sol.Grid()->_simd_layout[i];
+    Coordinate mpi_layout(4);
+    for(int i=0;i<4;i++)mpi_layout[i]=sol.Grid()->_processors[i];
+    GridCartesian * Ls3dGrid  = SpaceTimeGrid::makeFourDimGrid(
+                latt, simd_layout, mpi_layout);
     std::string outFileName;
-
+    FermionField Ls3dvec(Ls3dGrid);
+    FermionField Ls3dvec2(Ls3dGrid);
+    
     for(int mu=0;mu<3;mu++){
 
         //staggered phases go into links
@@ -262,12 +275,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
         Umu[mu] *= phases;
     }
 
-    tmp.Grid()->show_decomposition();
-    Umu[0].Grid()->show_decomposition();
-    assert(tmp.Grid()==Umu[0].Grid());
-
     int Nl_ = epack.evec.size();
-    corr=Zero();
     for (unsigned int il = 0; il < Nl_; il+=Ls/2)
     {
         LOG(Message) << "Vector block " << il << std::endl;
@@ -278,7 +286,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
         for(int iv=il;iv<il+Ls/2;iv++){
             // abs(eval) of unpreconditioned Dirac op
             std::complex<double> eval(mass,sqrt(epack.eval[iv]-mass*mass));
-            // plus/minus evecs
+            // both plus/minus evecs
             for(int pm=0;pm<2;pm++){
                 // construct full lattice evec/eval as 4d source
                 a2a.makeLowModeV(v, epack.evec[iv], eval, pm);
@@ -291,170 +299,67 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
             
             LOG(Message) << "StagMesonLoopCCHLHL src_t " << ts << std::endl;
 
+            for(int mu=0;mu<3;mu++){
 
-//                outFileName = par().output+"/cc_2pt_"+std::to_string(t)+"_mu_";
-//                std::string file = resultFilename(outFileName+"0","h5");
-//                bool f1 = exists(file);
-//                file = resultFilename(outFileName+"1","h5");
-//                bool f2 = exists(file);
-//                file = resultFilename(outFileName+"2","h5");
-//                bool f3 = exists(file);
-//                if(f1 and f2 and f3){
-//                    std::cout << "Skipping src point " << x << y << z << t << std::endl;
-//                            continue;
-//                }
-            // source only on desired time slice
-            // tmp = where((t5d == ts), source, source*0.);
-            // now low-mode solution on source as initial guess sol
-//            for(int s=0;s<Ls;s++){
-//                ExtractSlice(sol4d,tmp,s,0);
-///////////////////////////// from RedBlackSource in Grid: /////////////////////////////////////////////////////////////
-//                pickCheckerboard(Even,tmp_e,sol4d);
-//                pickCheckerboard(Odd ,tmp_o,sol4d);
-//                /////////////////////////////////////////////////////
-//                // src_o = (source_o - Moe MeeInv source_e)
-//                /////////////////////////////////////////////////////
-//                action.MooeeInv(tmp_e,tmpRB);     assert( tmpRB.Checkerboard() ==Even);
-//                action.Meooe   (tmpRB,tmpRB2);    assert( tmpRB2.Checkerboard() ==Odd);
-//                tmpRB2=tmp_o-tmpRB2;              assert( tmpRB2.Checkerboard() ==Odd);
-//                action.Mooee(tmpRB2,tmp_o);
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//                // now hit with low-mode prop (guess)
-//                LMA(tmp_o, tmpRB);
-//                setCheckerboard(sol4d,tmpRB);
-//                // zero out even part
-//                tmpRB2.Checkerboard()=Even;
-//                tmpRB2=0.;
-//                setCheckerboard(sol4d,tmpRB2);
-//                InsertSlice(sol4d,sol,s,0);
-//            }
-//            solver5D(sol, tmp);
-            //FermToProp<FImpl1>(q1, sol, c);
-        
-
-                for(int mu=0;mu<3;mu++){
-
-                    LOG(Message) << "StagMesonLoopCCHLHL src_mu " << mu << std::endl;
-                    tmp = where((t5d == ts), source, source*0.);
-                    tmp = adj(Umu[mu]) * tmp;
-                    // shift source
-                    tmp2 = Cshift(tmp, mu, 1);
-                    // now low-mode solution on source as initial guess sol
-                    for(int s=0;s<Ls;s++){
-                        ExtractSlice(sol4d,tmp2,s,0);
-        /////////////////////////// from RedBlackSource in Grid: /////////////////////////////////////////////////////////////
-                        pickCheckerboard(Even,tmp_e,sol4d);
-                        pickCheckerboard(Odd ,tmp_o,sol4d);
-                        /////////////////////////////////////////////////////
-                        // src_o = (source_o - Moe MeeInv source_e)
-                        /////////////////////////////////////////////////////
-                        action.MooeeInv(tmp_e,tmpRB);     assert( tmpRB.Checkerboard() ==Even);
-                        action.Meooe   (tmpRB,tmpRB2);    assert( tmpRB2.Checkerboard() ==Odd);
-                        tmpRB2=tmp_o-tmpRB2;              assert( tmpRB2.Checkerboard() ==Odd);
-                        action.Mooee(tmpRB2,tmp_o);
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-                        // now hit with low-mode prop (guess)
-                        LMA(tmp_o, tmpRB);
-                        setCheckerboard(sol4d,tmpRB);
-                        // zero out even part
-                        tmpRB2.Checkerboard()=Even;
-                        tmpRB2=0.;
-                        setCheckerboard(sol4d,tmpRB2);
-                        InsertSlice(sol4d,sol2,s,0);
-                    }
-                    solver5D(sol2, tmp2);
-                    solshift=Cshift(sol2, mu, 1);
-                    solshift = Umu[mu] * solshift;
-                    corr += innerProduct(source, solshift);
-                    sourceshift=Cshift(source, mu, 1);
-                    sourceshift = Umu[mu] * sourceshift;
-                    corr += innerProduct(sourceshift, sol2);
-                    
-                    tmp = where((t5d == ts), source, source*0.);
-                    tmp2 = Cshift(tmp,mu,-1);
-                    tmp = Umu[mu] * tmp2;
-                    // now low-mode solution on source as initial guess sol
-                    for(int s=0;s<Ls;s++){
-                        ExtractSlice(sol4d,tmp,s,0);
-        /////////////////////////// from RedBlackSource in Grid: /////////////////////////////////////////////////////////////
-                        pickCheckerboard(Even,tmp_e,sol4d);
-                        pickCheckerboard(Odd ,tmp_o,sol4d);
-                        /////////////////////////////////////////////////////
-                        // src_o = (source_o - Moe MeeInv source_e)
-                        /////////////////////////////////////////////////////
-                        action.MooeeInv(tmp_e,tmpRB);     assert( tmpRB.Checkerboard() ==Even);
-                        action.Meooe   (tmpRB,tmpRB2);    assert( tmpRB2.Checkerboard() ==Odd);
-                        tmpRB2=tmp_o-tmpRB2;              assert( tmpRB2.Checkerboard() ==Odd);
-                        action.Mooee(tmpRB2,tmp_o);
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-                        // now hit with low-mode prop (guess)
-                        LMA(tmp_o, tmpRB);
-                        setCheckerboard(sol4d,tmpRB);
-                        // zero out even part
-                        tmpRB2.Checkerboard()=Even;
-                        tmpRB2=0.;
-                        setCheckerboard(sol4d,tmpRB2);
-                        InsertSlice(sol4d,sol2,s,0);
-                    }
-                    solver5D(sol2, tmp);
-                    solshift=Cshift(sol2, mu, 1);
-                    solshift = Umu[mu] * solshift;
-                    corr += innerProduct(source, solshift);
-                    //sourceshift=Cshift(source, mu, 1);
-                    //sourceshift = Umu[mu] * sourceshift;
-                    corr += innerProduct(sourceshift, sol2);
-                    
-//                    //corr += trace(adj(q1) * Umu[mu] * qshift * adj(UmuSrc));
-//                    corr += innerProduct(q1 * UmuSrc, Umu[mu] * qshift);
-//
-//                    qshift = Cshift(q1, mu, 1);
-//                    // minus signs from herm transform of prop
-//                    corr -= trace(adj(q2) * Umu[mu] * qshift * UmuSrc); // -1^muhat
-//                    corr -= trace(adj(qshift) * adj(Umu[mu]) * q2 * adj(UmuSrc)); //-1^muhat
-//
-//                    corr *= herm_phase; // sink
-//                    if((x+y+z+t)%2)corr *= -1.0; // source
-//
-//
-//                    // do the local current
-//                    corr = trace(adj(q1) * q1);
-//                    // ks phases (includes hermiticity phase)
-//                    corr *= localphases[mu]; // gamma at sink
-//                    if(      mu==0 && x % 2 )corr *= -1.0; // gamma phase at source
-//                    else if( mu==1 && y % 2 )corr *= -1.0; // gamma phase at source
-//                    else if( mu==2 && z % 2 )corr *= -1.0; // gamma phase at source
-//                    else if( mu==3 && t % 2 )corr *= -1.0; // gamma phase at source
-//
-//                    sliceSum(corr, buf, Tp);
-//                    for (unsigned int tsnk = 0; tsnk < buf.size(); ++tsnk){
-//                        result.corr[tsnk] = TensorRemove(buf[tsnk]);
-//                    }
-//                    outFileName = par().output+"local_2pt_"+std::to_string(t)+"_mu_"+std::to_string(mu);
-//                    saveResult(outFileName, "mesonLL", result);
+                LOG(Message) << "StagMesonLoopCCHLHL src_mu " << mu << std::endl;
+                tmp = where((t5d == ts), source, source*0.);
+                for(int s=0;s<Ls;s++){
+                    ExtractSlice(v,tmp,s,0);
+                    v = adj(Umu[mu]) * v;
+                    InsertSlice(v,tmp,s,0);
                 }
-//                // do the local Goldstone pion
-//                corr = trace(adj(q1) * q1);
-//                sliceSum(corr, buf, Tp);
-//                for (unsigned int tsnk = 0; tsnk < buf.size(); ++tsnk){
-//                    result.corr[tsnk] = TensorRemove(buf[tsnk]);
-//                }
-//                outFileName = par().output+"local_pion_"+
-//                          std::to_string(x)+"_"+
-//                          std::to_string(y)+"_"+
-//                          std::to_string(z)+"_"+
-//                          std::to_string(t);
-//                saveResult(outFileName, "mesonLL", result);
+                // shift source
+                tmp2 = Cshift(tmp, mu, 1);
+                // now low-mode solution on source as initial guess sol
+                for(int s=0;s<Ls;s++){
+                    ExtractSlice(sol4d,tmp2,s,0);
+        /////////////////////////// from RedBlackSource in Grid: /////////////////////////////////////////////////////////////
+                    pickCheckerboard(Even,tmp_e,sol4d);
+                    pickCheckerboard(Odd ,tmp_o,sol4d);
+                    /////////////////////////////////////////////////////
+                    // src_o = (source_o - Moe MeeInv source_e)
+                    /////////////////////////////////////////////////////
+                    action.MooeeInv(tmp_e,tmpRB);     assert( tmpRB.Checkerboard() ==Even);
+                    action.Meooe   (tmpRB,tmpRB2);    assert( tmpRB2.Checkerboard() ==Odd);
+                    tmpRB2=tmp_o-tmpRB2;              assert( tmpRB2.Checkerboard() ==Odd);
+                    action.Mooee(tmpRB2,tmp_o);
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                    // now hit with low-mode prop (guess)
+                    LMA(tmp_o, tmpRB);
+                    setCheckerboard(sol4d,tmpRB);
+                    // zero out even part
+                    tmpRB2.Checkerboard()=Even;
+                    tmpRB2=0.;
+                    setCheckerboard(sol4d,tmpRB2);
+                    InsertSlice(sol4d,sol,s,0);
+                }
+                solver5D(sol, tmp2);
+                solshift=Cshift(sol, mu, 1);
+                // take inner-product with eigenmode on all time slices
+                for(int s=0;s<Ls;s++){
+                    ExtractSlice(v,source,s,0);
+                    v = adj(Umu[mu]) * v;
+                    InsertSlice(v,tmp2,s,0);
+                }
+                for(int t=0; t<nt; t++){
+                    ExtractSlice(Ls3dvec,tmp2,t,4);
+                    ExtractSlice(Ls3dvec2,sol,t,4);
+                    result[mu].corr[(t-ts+nt)%nt] += innerProduct(Ls3dvec, Ls3dvec2);
+                }
+            }
         }
     }
-    sliceSum(corr, buf, Tp);
-    for (unsigned int tsnk = 0; tsnk < buf.size(); ++tsnk){
-        result.corr[tsnk] = TensorRemove(buf[tsnk]);
+    
+    for (int i = 0; i < 3; ++i){
+        if(U.Grid()->IsBoss()){
+            makeFileDir(par().output);
+            outFileName = par().output+"HLcc_2pt_mu"+std::to_string(i);
+            saveResult(outFileName, "HLCC", result[i]);
+        }
     }
-    outFileName = par().output+"HLcc_2pt";
-    saveResult(outFileName, "HLCC", result);
 }
 END_MODULE_NAMESPACE
 
 END_HADRONS_NAMESPACE
 
-#endif // Hadrons_MContraction_MesonLoopCCHL_hpp_
+#endif
