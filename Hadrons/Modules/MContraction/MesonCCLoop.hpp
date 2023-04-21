@@ -194,7 +194,7 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
     Lattice<iScalar<vInteger> > z(U.Grid()); LatticeCoordinate(z,2);
     Lattice<iScalar<vInteger> > t(U.Grid()); LatticeCoordinate(t,3);
     Lattice<iScalar<vInteger> > lin_z(U.Grid()); lin_z=x+y;
-    Lattice<iScalar<vInteger> > lin_t(U.Grid()); lin_z=x+y+z;
+    Lattice<iScalar<vInteger> > lin_t(U.Grid()); lin_t=x+y+z;
     LatticeComplex phases(U.Grid());
     std::vector<LatticeComplex> localphases(3,U.Grid());
 
