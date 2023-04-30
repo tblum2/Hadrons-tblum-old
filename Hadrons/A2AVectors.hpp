@@ -514,8 +514,7 @@ void A2AVectorsSchurStaggeredNoEval<FImpl>::makeLowModeV(FermionField &vout,
                                                       const std::complex<double> eval,
                                                       const int sign)
 {
-    //src_o_ = evec;
-    pickCheckerboard(Odd, src_o_, evec);
+    src_o_ = evec;
     src_o_.Checkerboard() = Odd;
     pickCheckerboard(Even, sol_e_, vout);
     pickCheckerboard(Odd, sol_o_, vout);
@@ -537,6 +536,8 @@ void A2AVectorsSchurStaggeredNoEval<FImpl>::makeLowModeV(FermionField &vout,
     assert(sol_e_.Checkerboard() == Even);
     setCheckerboard(vout, sol_o_);
     assert(sol_o_.Checkerboard() == Odd);
+    //should renorm, but...
+    //vout *= 1/sqrt(2); // since norm of all site evec is 2
 }
 
 template <typename FImpl>

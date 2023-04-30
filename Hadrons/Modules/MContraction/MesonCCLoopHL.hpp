@@ -148,25 +148,24 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
     envTmpLat(FermionField, "tmp2");
     envTmpLat(FermionField, "sol");
     envTmpLat(FermionField, "solshift");
-    envTmpLat(FermionField, "v");
+    envTmpLat(FermionField, "w");
 }
 
 // execution ///////////////////////////////////////////////////////////////////
 template <typename FImpl1, typename FImpl2>
 void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 {
-    LOG(Message) << "Computing Conserved Current Stag meson contractions " << std::endl;
-
-    //printMem("MesonLoopCCHL execute() ", env().getGrid()->ThisRank());
+    LOG(Message) << "Computing High-Low Conserved Current Stag meson contractions " << std::endl;
 
     std::vector<ComplexD>  corr;
     std::vector<Result> result(3);
     int nt = env().getDim(Tp);
     int ns = env().getDim(Xp);
+    // init
     for(int mu=0;mu<3;mu++){
         result[mu].corr.resize(nt);
         for(int t=0;t<nt;t++){
-            result[mu].corr[t]=0.;
+            result[mu].corr[t]=(ComplexD)(0.,0.);
         }
     }
 
@@ -180,14 +179,13 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     envGetTmp(A2A, a2a);
     
     // Do spatial gammas only
-    Lattice<iScalar<vInteger> > x(U.Grid()); LatticeCoordinate(x,0);
-    Lattice<iScalar<vInteger> > y(U.Grid()); LatticeCoordinate(y,1);
-    Lattice<iScalar<vInteger> > z(U.Grid()); LatticeCoordinate(z,2);
-    Lattice<iScalar<vInteger> > t(U.Grid()); LatticeCoordinate(t,3);
-    Lattice<iScalar<vInteger> > lin_z(U.Grid()); lin_z=x+y;
-    Lattice<iScalar<vInteger> > lin_t(U.Grid()); lin_t=x+y+z;
+    Lattice<iScalar<vInteger>> x(U.Grid()); LatticeCoordinate(x,0);
+    Lattice<iScalar<vInteger>> y(U.Grid()); LatticeCoordinate(y,1);
+    Lattice<iScalar<vInteger>> z(U.Grid()); LatticeCoordinate(z,2);
+    Lattice<iScalar<vInteger>> t(U.Grid()); LatticeCoordinate(t,3);
+    Lattice<iScalar<vInteger>> lin_z(U.Grid()); lin_z=x+y;
+    Lattice<iScalar<vInteger>> lin_t(U.Grid()); lin_t=x+y+z;
     LatticeComplex phases(U.Grid());
-    std::vector<LatticeComplex> localphases(3,U.Grid());
     std::vector<LatticeColourMatrix> Umu(3,U.Grid());
     // source, solution
     envGetTmp(FermionField, source);
@@ -195,15 +193,14 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     envGetTmp(FermionField, tmp2);
     envGetTmp(FermionField, sol);
     envGetTmp(FermionField, solshift);
-    envGetTmp(FermionField, v);
-        
+    envGetTmp(FermionField, w);
+    
     std::string outFileName;
     
     for(int mu=0;mu<3;mu++){
 
         //staggered phases go into links
         Umu[mu] = PeekIndex<LorentzIndex>(U,mu);
-        localphases[mu]=1.0;
         phases=1.0;
         if(mu==0){
         }else if(mu==1){
@@ -219,16 +216,21 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     int Nl_ = epack.evec.size();
     for (unsigned int il = 0; il < Nl_; il++)
     {
-        // eval of unpreconditioned Dirac op
+        //
         std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
         // both plus/minus evecs
         for(int pm=0;pm<2;pm++){
             
             LOG(Message) << "Eigenvector " << 2*il+pm << std::endl;
 
-            // construct full lattice evec/eval as 4d source
-            a2a.makeLowModeV(v, epack.evec[il], eval, pm);
-        
+            // construct full lattice evec as 4d source (no 1/lambda here)
+            a2a.makeLowModeW(w, epack.evec[il], eval, pm);
+            
+            // -lambda eigenvalue
+            if(pm){
+                ComplexD cc = conjugate(eval);
+                eval = cc;
+            }
             // loop over source time slices
             for(int ts=0; ts<nt;ts+=par().tinc){
                 
@@ -238,55 +240,55 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 
                     LOG(Message) << "StagMesonLoopCCHLHL src_mu " << mu << std::endl;
                     
-                    tmp = where(t == ts, v, v*0.);
-                    //std::cout<< tmp << std::endl;
-                    //std::exit(0);
+                    tmp = where(t == ts, w, w*0.);
                     tmp2 = adj(Umu[mu]) * tmp;
                    
                     // shift source at x to x+mu
                     tmp = Cshift(tmp2, mu, -1);
                     
-                    sol=Zero();
                     solver(sol, tmp);
                     
-                    // take inner-product with eigen bra on all time slices
-                    tmp = Cshift(v, mu, 1);
+                    // take inner-product with eigenbra on all time slices
+                    tmp = Cshift(w, mu, 1);
                     tmp2 = Umu[mu] * tmp;
                     sliceInnerProductVector(corr,tmp2,sol,3);
                     for(int tsnk=0; tsnk<nt; tsnk++){
-                        result[mu].corr[(tsnk-ts+nt)%nt] += corr[tsnk];
+                        ComplexD cc = corr[tsnk] / eval;
+                        result[mu].corr[(tsnk-ts+nt)%nt] += cc;
                     }
                     
                     solshift=Cshift(sol, mu, 1);
-                    // take inner-product with eigen bra on all time slices
-                    tmp = adj(Umu[mu]) * v;
+                    // take inner-product with eigenbra on all time slices
+                    tmp = adj(Umu[mu]) * w;
                     sliceInnerProductVector(corr,tmp,solshift,3);
                     for(int tsnk=0; tsnk<nt; tsnk++){
-                        result[mu].corr[(tsnk-ts+nt)%nt] += corr[tsnk];
+                        ComplexD cc = corr[tsnk] / eval;
+                        result[mu].corr[(tsnk-ts+nt)%nt] += cc;
                     }
-                    
-                    tmp = where(t == ts, v, v*0.);
+
+                    tmp = where(t == ts, w, w*0.);
                     // shift source
                     tmp2 = Cshift(tmp, mu, 1);
                     tmp = Umu[mu] * tmp2;
-                    
-                    sol=Zero();
+
                     solver(sol, tmp);
-                    
+
                     // take inner-product with eigenmode on all time slices
-                    tmp = Cshift(v, mu, 1);
+                    tmp = Cshift(w, mu, 1);
                     tmp2 = Umu[mu] * tmp;
                     sliceInnerProductVector(corr,tmp2,sol,3);
                     for(int tsnk=0; tsnk<nt; tsnk++){
-                        result[mu].corr[(tsnk-ts+nt)%nt] += corr[tsnk];
+                        ComplexD cc = corr[tsnk] / eval;
+                        result[mu].corr[(tsnk-ts+nt)%nt] += cc;
                     }
-                    
+
                     solshift=Cshift(sol, mu, 1);
                     // take inner-product with eigenmode on all time slices
-                    tmp = adj(Umu[mu]) * v;
+                    tmp = adj(Umu[mu]) * w;
                     sliceInnerProductVector(corr,tmp,solshift,3);
                     for(int tsnk=0; tsnk<nt; tsnk++){
-                        result[mu].corr[(tsnk-ts+nt)%nt] += corr[tsnk];
+                        ComplexD cc = corr[tsnk] / eval;
+                        result[mu].corr[(tsnk-ts+nt)%nt] += cc;
                     }
                 }
             }

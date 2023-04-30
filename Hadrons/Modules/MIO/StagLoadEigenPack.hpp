@@ -193,6 +193,8 @@ void TStagLoadEigenPack<Pack, GImpl, FImpl>::execute(void)
             action.Meooe(epack.evec[i], temp);
             cc = minusI/eval;
             epack.evec[i] = cc * temp; // now it's even!
+            epack.evec[i].Checkerboard() = Even;
+            //LOG(Message) << "Eigenvector norm " << norm2(epack.evec[i]) << std::endl;
         }
     } else {
         for (unsigned int i = 0; i < par().size; i++)
