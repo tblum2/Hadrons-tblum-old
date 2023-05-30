@@ -37,6 +37,7 @@ See the full license in the file "LICENSE" in the top level distribution directo
 #include <Hadrons/ModuleFactory.hpp>
 #include <Hadrons/Modules/MSource/Point.hpp>
 #include <Hadrons/EigenPack.hpp>
+#include <Hadrons/Solver.hpp>
 
 BEGIN_HADRONS_NAMESPACE
 
@@ -65,6 +66,7 @@ public:
                                     std::string, output,
                                     std::string, eigenPack,
                                     std::string, action,
+                                    std::string, solver,
                                     double, mass,
                                     int, inc,
                                     int, tinc);
@@ -77,7 +79,7 @@ public:
     typedef typename FImpl1::FermionField FermionField;
     FERM_TYPE_ALIASES(FImpl1, 1);
     FERM_TYPE_ALIASES(FImpl2, 2);
-    //SOLVER_TYPE_ALIASES(FImpl1,);
+    SOLVER_TYPE_ALIASES(FImpl1,);
     BASIC_TYPE_ALIASES(ScalarImplCR, Scalar);
     SINK_TYPE_ALIASES(Scalar);
     class Result: Serializable
@@ -118,7 +120,7 @@ public:
       guess.Checkerboard() = src.Checkerboard();
     };
 private:
-    //Solver       *solver_{nullptr};
+    Solver       *solver_{nullptr};
 };
 
 MODULE_REGISTER_TMP(StagMesonCCLoopLMA, ARG(TStagMesonCCLoopLMA<STAGIMPL, STAGIMPL>), MContraction);
@@ -136,7 +138,7 @@ TStagMesonCCLoopLMA<FImpl1, FImpl2>::TStagMesonCCLoopLMA(const std::string name)
 template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TStagMesonCCLoopLMA<FImpl1, FImpl2>::getInput(void)
 {
-    std::vector<std::string> input = {par().gauge, par().eigenPack, par().action};
+    std::vector<std::string> input = {par().gauge, par().eigenPack, par().action, par().solver};
 
     return input;
 }
@@ -196,6 +198,7 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
     auto &U = envGet(LatticeGaugeField, par().gauge);
     auto &epack = envGet(BaseFermionEigenPack<FImpl1>, par().eigenPack);
     auto &action = envGet(FermionOperator<FImpl1>, par().action); // for mult by Meo, Moe
+    auto &solver  = envGet(Solver, par().solver);
     Guesser LMA(epack.evec, epack.eval);
 
     // need another guesser to mult by m/lambda^2;
@@ -266,7 +269,7 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
                     srcSite[1]=y;
                     srcSite[2]=z;
                     srcSite[3]=t;
-                    assert((x+y+z+t)%2==0);// must be Even
+                    //assert((x+y+z+t)%2==0);// must be Even
 
                     outFileName = par().output+"/cc_2pt_"+
                         std::to_string(x)+"_"+
@@ -287,22 +290,32 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
                         continue;
                     }
 
+//                    for (unsigned int c = 0; c < FImpl1::Dimension; ++c){
+//                        source = Zero();
+//                        Csrc=Zero();
+//                        Csrc()()(c)=Complex(1.0,0.0);
+//                        pokeSite(Csrc,source,srcSite);
+//                        sol = Zero();
+//                        // sol on odd sites first
+//                        pickCheckerboard(Even,halfSource,source);
+//                        action.Meooe(halfSource,tmp);
+//                        LMA(tmp, halfSol);
+//                        setCheckerboard(sol,halfSol);
+//                        // now even
+//                        LMA2(tmp, halfSol);
+//                        action.Meooe(halfSol,tmp);
+//                        setCheckerboard(sol,tmp);
+//                        sol *= -1.0;
+//                        FermToProp<FImpl1>(q1, sol, c);
+//                    }
+                    // debug
                     for (unsigned int c = 0; c < FImpl1::Dimension; ++c){
                         source = Zero();
                         Csrc=Zero();
                         Csrc()()(c)=Complex(1.0,0.0);
                         pokeSite(Csrc,source,srcSite);
                         sol = Zero();
-                        // sol on odd sites first
-                        pickCheckerboard(Even,halfSource,source);
-                        action.Meooe(halfSource,tmp);
-                        LMA(tmp, halfSol);
-                        setCheckerboard(sol,halfSol);
-                        // now even
-                        LMA2(tmp, halfSol);
-                        action.Meooe(halfSol,tmp);
-                        setCheckerboard(sol,tmp);
-                        sol *= -1.0;
+                        solver(sol, source);
                         FermToProp<FImpl1>(q1, sol, c);
                     }
 
@@ -324,16 +337,31 @@ void TStagMesonCCLoopLMA<FImpl1, FImpl2>::execute(void)
                             Csrc()()(c)=Complex(1.0,0.0);
                             pokeSite(Csrc,source,srcSite);
                             sol = Zero();
+                            // See eq. 59 in eo precondtion notes
                             // sol on odd sites first
-                            // assuming the source is Odd from point-splitting
-                            pickCheckerboard(Odd,halfSource,source);
-                            LMA(halfSource, halfSol);
-                            tmp = mass * halfSol;
-                            setCheckerboard(sol,tmp);
-                            // now even sol
-                            action.Meooe(halfSol,tmp);
-                            tmp *= -1.0;
-                            setCheckerboard(sol,tmp);
+                            // if the point-split source is Odd
+                            if((x+y+z+t)%2==0){
+                                pickCheckerboard(Odd,halfSource,source);
+                                LMA(halfSource, halfSol);
+                                tmp = mass * halfSol;
+                                setCheckerboard(sol,tmp);
+                                // now even part of sol
+                                action.Meooe(halfSol,tmp);
+                                tmp *= -1.0;
+                                setCheckerboard(sol,tmp);
+                            } else {
+                                pickCheckerboard(Even,halfSource,source);
+                                action.Meooe(halfSource,tmp);
+                                LMA(tmp, halfSol);
+                                halfSol *= -1.0;
+                                setCheckerboard(sol,halfSol);
+                                // now even part of sol
+                                action.Meooe(halfSol,tmp);
+                                tmp *= -1.0/mass;
+                                halfSource *= 1.0/mass;
+                                tmp = tmp+halfSource;
+                                setCheckerboard(sol,tmp);
+                            }
                             FermToProp<FImpl1>(q2, sol, c);
                         }
 

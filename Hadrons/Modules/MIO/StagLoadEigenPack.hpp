@@ -154,24 +154,13 @@ void TStagLoadEigenPack<Pack, GImpl, FImpl>::setup(void)
             envTmp(GaugeMat,    "tmpXform", par().Ls, envGetGrid(Field));
             envTmp(GaugeMat, "tmpXformOdd", par().Ls, envGetRbGrid(Field));
         }
-        
     }
-    
-    // reserve memory now for two sets of size "size" v vectors before mpi read takes it all
-    // envCreate(std::vector<Field>, par().v1, 1, par().vnum, envGetGrid(Field));
-    //envCreate(std::vector<Field>, par().v2, 1, par().vnum, envGetGrid(Field));
 }
 
 // execution ///////////////////////////////////////////////////////////////////
 template <typename Pack, typename GImpl, typename FImpl>
 void TStagLoadEigenPack<Pack, GImpl, FImpl>::execute(void)
 {
-    
-    //dummy space, to save memory from IO
-    //uint64_t mysize = env().getRbGrid()->lSites() * 6 * par().size / 2; //need 2 otherwise too big for 4000 evecs
-    //std::cout<<"mysize= "<<mysize<<std::endl;
-    //std::vector<double> dummy(mysize);
-    //printMem("StagLoadEigenPack::execute(): BEGIN", env().getGrid()->ThisRank());
     
     auto &action= envGet(FMat, par().action);
     auto &epack = envGetDerived(BasePack, Pack, getName());
@@ -185,6 +174,7 @@ void TStagLoadEigenPack<Pack, GImpl, FImpl>::execute(void)
     double mass = par().mass;
     Field temp(epack.evec[0].Grid());
     
+    // make even evecs from Odd
     if(par().even && !par().doubleMemory){
         for (unsigned int i = 0; i < par().size; i++)
         {
@@ -194,13 +184,19 @@ void TStagLoadEigenPack<Pack, GImpl, FImpl>::execute(void)
             cc = minusI/eval;
             epack.evec[i] = cc * temp; // now it's even!
             epack.evec[i].Checkerboard() = Even;
-            //LOG(Message) << "Eigenvector norm " << norm2(epack.evec[i]) << std::endl;
         }
     } else {
         for (unsigned int i = 0; i < par().size; i++)
             epack.evec[i].Checkerboard() = Odd;
     }
-
+    
+//    // assign 4d evecs to 5th dim.
+//    int Ls = par().Ls;
+//    for (unsigned int i = 0; i < par().size; i++){
+//        int s=i/Ls;
+//        &(epack.evec5d[s+i*Ls]) = &(epack.evec[i]);
+//    }
+    
     if (!par().gaugeXform.empty())
     {
 

@@ -214,6 +214,18 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     }
 
     int Nl_ = epack.evec.size();
+    // for full dirac op low mode sub
+    std::vector<FermionField> v(2*Nl_,env().getGrid());
+    FermionField sub(env().getGrid());
+    for (unsigned int il = 0; il < Nl_; il++)
+    {
+        // eval of unpreconditioned Dirac op
+        std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
+        a2a.makeLowModeV(v[2*il], epack.evec[il], eval);
+        // construct -lambda evec
+        a2a.makeLowModeV(v[2*il+1], epack.evec[il], eval, 1);
+    }
+    
     for (unsigned int il = 0; il < Nl_; il++)
     {
         //
@@ -247,7 +259,19 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                     tmp = Cshift(tmp2, mu, -1);
                     
                     solver(sol, tmp);
-                    
+                    // subtract the low modes
+                    sub = Zero();
+                    for (int i=0;i<2*Nl_;i++) {
+                        std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
+                        const FermionField& tmp2 = v[i];
+                        // eval of unpreconditioned Dirac op
+                        eval = i%2 ? eval : conjugate(eval);
+                        // need to subtract |l><l|/lambda_l |src>, so
+                        // mult by eval* since v already has 1/eval
+                        axpy(sub,TensorRemove(innerProduct(tmp2,tmp)) * eval,tmp2,sub);
+                    }
+                    sol -= sub;
+
                     // take inner-product with eigenbra on all time slices
                     tmp = Cshift(w, mu, 1);
                     tmp2 = Umu[mu] * tmp;
@@ -272,7 +296,18 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                     tmp = Umu[mu] * tmp2;
 
                     solver(sol, tmp);
-
+                    sub = Zero();
+                    for (int i=0;i<2*Nl_;i++) {
+                        std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
+                        const FermionField& tmp2 = v[i];
+                        // eval of unpreconditioned Dirac op
+                        eval = i%2 ? eval : conjugate(eval);
+                        // need to subtract |l><l|/lambda_l |src>, so
+                        // mult by eval* since v already has 1/eval
+                        axpy(sub,TensorRemove(innerProduct(tmp2,tmp)) * eval,tmp2,sub);
+                    }
+                    sol -= sub;
+                    
                     // take inner-product with eigenmode on all time slices
                     tmp = Cshift(w, mu, 1);
                     tmp2 = Umu[mu] * tmp;

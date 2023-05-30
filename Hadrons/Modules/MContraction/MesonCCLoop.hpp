@@ -29,13 +29,15 @@ See the full license in the file "LICENSE" in the top level distribution directo
 *************************************************************************************/
 /*  END LEGAL */
 
-#ifndef Hadrons_MContraction_MesonCCLoop_hpp_
-#define Hadrons_MContraction_MesonCCLoop_hpp_
+#ifndef Hadrons_MContraction_MesonCCLoop_hpp
+#define Hadrons_MContraction_MesonCCLoop_hpp
 
+#include <Hadrons/A2AVectors.hpp>
 #include <Hadrons/Global.hpp>
 #include <Hadrons/Module.hpp>
 #include <Hadrons/ModuleFactory.hpp>
 #include <Hadrons/Modules/MSource/Point.hpp>
+#include <Hadrons/EigenPack.hpp>
 #include <Hadrons/Solver.hpp>
 
 BEGIN_HADRONS_NAMESPACE
@@ -63,7 +65,12 @@ public:
     GRID_SERIALIZABLE_CLASS_MEMBERS(MesonCCLoopPar,
                                     std::string, gauge,
                                     std::string, output,
+                                    std::string, eigenPack,
+                                    std::string, action,
                                     std::string, solver,
+                                    bool, sub,
+                                    bool, high,
+                                    double, mass,
                                     int, inc,
                                     int, tinc);
 };
@@ -73,6 +80,8 @@ class TStagMesonCCLoop: public Module<MesonCCLoopPar>
 {
 public:
     typedef typename FImpl1::FermionField FermionField;
+    typedef FermionOperator<FImpl1>          FMat;
+    typedef A2AVectorsSchurStaggered<FImpl1> A2A;
     FERM_TYPE_ALIASES(FImpl1, 1);
     FERM_TYPE_ALIASES(FImpl2, 2);
     SOLVER_TYPE_ALIASES(FImpl1,);
@@ -93,7 +102,7 @@ public:
     virtual std::vector<std::string> getInput(void);
     virtual std::vector<std::string> getOutput(void);
     protected:
-    // execution
+    // setup
     virtual void setup(void);
     // execution
     virtual void execute(void);
@@ -101,6 +110,7 @@ public:
       struct stat buffer;
       return (stat (name.c_str(), &buffer) == 0);
     }
+    
 private:
     Solver       *solver_{nullptr};
 };
@@ -120,7 +130,7 @@ TStagMesonCCLoop<FImpl1, FImpl2>::TStagMesonCCLoop(const std::string name)
 template <typename FImpl1, typename FImpl2>
 std::vector<std::string> TStagMesonCCLoop<FImpl1, FImpl2>::getInput(void)
 {
-    std::vector<std::string> input = {par().gauge, par().solver};
+    std::vector<std::string> input = {par().gauge, par().eigenPack, par().action, par().solver};
 
     return input;
 }
@@ -143,7 +153,10 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::setup(void)
     envTmpLat(PropagatorField1, "qshift");
     envTmpLat(FermionField, "source");
     envTmpLat(FermionField, "sol");
-
+    auto        &action     = envGet(FMat, par().action);
+    auto        &solver     = envGet(Solver, par().solver);
+    envTmp(A2A, "a2a", 1, action, solver);
+    
     // grid can't handle real * prop, so use complex
     envTmpLat(LatticeComplex,  "herm_phase");
     envGetTmp(LatticeComplex, herm_phase);
@@ -160,16 +173,14 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::setup(void)
     herm_phase = 1.0;
     s=x+y+z+t;
     herm_phase = where( mod(s,2)==(Integer)0, herm_phase, -herm_phase);
-    //printMem("MesonCCLoop setup() end", env().getGrid()->ThisRank());
 }
 
 // execution ///////////////////////////////////////////////////////////////////
 template <typename FImpl1, typename FImpl2>
 void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
 {
-    LOG(Message) << "Computing Conserved Current Stag meson contractions " << std::endl;
-
-    //printMem("MesonCCLoop execute() ", env().getGrid()->ThisRank());
+    
+    LOG(Message) << "Computing Conserved Current Stag meson contractions using  approx " << std::endl;
 
     std::vector<TComplex>  buf;
     Result    result;
@@ -178,9 +189,13 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
 
     result.corr.resize(nt);
 
-    auto &U       = envGet(LatticeGaugeField, par().gauge);
+    auto &U = envGet(LatticeGaugeField, par().gauge);
+    auto &epack = envGet(BaseFermionEigenPack<FImpl1>, par().eigenPack);
+    auto &action = envGet(FermionOperator<FImpl1>, par().action); // for mult by Meo, Moe
     auto &solver  = envGet(Solver, par().solver);
-    auto &mat     = solver.getFMat();
+    envGetTmp(A2A, a2a);
+    
+    double mass = par().mass;
 
     envGetTmp(LatticeComplex, corr);
     envGetTmp(LatticeComplex, herm_phase);
@@ -201,6 +216,8 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
     std::vector<LatticeColourMatrix> Umu(3,U.Grid());
     envGetTmp(FermionField, source);
     envGetTmp(FermionField, sol);
+    FermionField tmp(env().getRbGrid());
+
     Coordinate srcSite;
     ColourMatrix UmuSrc;
     ColourVector Csrc;
@@ -227,7 +244,20 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
         Umu[mu] *= phases;
     }
 
+    int Nl_ = epack.evec.size();
+    // for full dirac op low mode sub
+    std::vector<FermionField> w(2*Nl_,env().getGrid());
+    FermionField sub(env().getGrid());
+    for (unsigned int il = 0; il < Nl_; il++)
+    {
+        // eval of unpreconditioned Dirac op
+        std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
+        a2a.makeLowModeW(w[2*il], epack.evec[il], eval);
+        // construct -lambda evec
+        a2a.makeLowModeW(w[2*il+1], epack.evec[il], eval, 1);
+    }
     // loop over source position
+    // assumed to be Even for now
     for(int t=0; t<nt;t+=par().tinc){
         for(int z=0; z<ns;z+=par().inc){
             for(int y=0; y<ns;y+=par().inc){
@@ -237,6 +267,7 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
                     srcSite[1]=y;
                     srcSite[2]=z;
                     srcSite[3]=t;
+                    //assert((x+y+z+t)%2==0);// must be Even
 
                     outFileName = par().output+"/cc_2pt_"+
                         std::to_string(x)+"_"+
@@ -264,6 +295,20 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
                         pokeSite(Csrc,source,srcSite);
                         sol = Zero();
                         solver(sol, source);
+                        // subtract the low modes
+                        sub = Zero();
+                        for (int i=0;i<2*Nl_;i++) {
+                            const FermionField& tmp = w[i];
+                            // eval of unpreconditioned Dirac op
+                            std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
+                            eval = i%2==0 ? 1.0/eval : 1.0/conjugate(eval);
+                            axpy(sub,TensorRemove(innerProduct(tmp,source)) * eval,tmp,sub);
+                        }
+                        if(par().sub && par().high){
+                            sol -= sub;
+                        } else {
+                            sol = sub;
+                        }
                         FermToProp<FImpl1>(q1, sol, c);
                     }
 
@@ -286,6 +331,20 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
                             pokeSite(Csrc,source,srcSite);
                             sol = Zero();
                             solver(sol, source);
+                            // subtract the low modes
+                            sub = Zero();
+                            for (int i=0;i<2*Nl_;i++) {
+                                const FermionField& tmp = w[i];
+                                // eval of unpreconditioned Dirac op
+                                std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
+                                eval = i%2==0 ? 1.0/eval : 1.0/conjugate(eval);
+                                axpy(sub,TensorRemove(innerProduct(tmp,source)) * eval,tmp,sub);
+                            }
+                            if(par().sub){
+                                sol -= sub;
+                            } else {
+                                sol = sub;
+                            }
                             FermToProp<FImpl1>(q2, sol, c);
                         }
 
@@ -326,7 +385,7 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
                         for (unsigned int tsnk = 0; tsnk < buf.size(); ++tsnk){
                             result.corr[tsnk] = TensorRemove(buf[tsnk]);
                         }
-                        outFileName = par().output+"local_2pt_"+
+                        outFileName = par().output+"/local_2pt_"+
                             std::to_string(x)+"_"+
                             std::to_string(y)+"_"+
                             std::to_string(z)+"_"+
@@ -334,18 +393,6 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
                             std::to_string(mu);
                         saveResult(outFileName, "mesonLL", result);
                     }
-                    // do the local Goldstone pion
-                    corr = trace(adj(q1) * q1);
-                    sliceSum(corr, buf, Tp);
-                    for (unsigned int tsnk = 0; tsnk < buf.size(); ++tsnk){
-                        result.corr[tsnk] = TensorRemove(buf[tsnk]);
-                    }
-                    outFileName = par().output+"local_pion_"+
-                        std::to_string(x)+"_"+
-                        std::to_string(y)+"_"+
-                        std::to_string(z)+"_"+
-                        std::to_string(t);
-                    saveResult(outFileName, "mesonLL", result);
                 }
             }
         }
@@ -355,4 +402,4 @@ END_MODULE_NAMESPACE
 
 END_HADRONS_NAMESPACE
 
-#endif // Hadrons_MContraction_MesonCCLoop_hpp_
+#endif // Hadrons_MContraction_MesonCCLoop_hpp
