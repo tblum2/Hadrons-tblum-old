@@ -175,7 +175,14 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     auto        &solver    = envGet(Solver, par().solver);
     auto &epack   = envGet(BaseFermionEigenPack<FImpl1>, par().eigenPack);
     double mass = par().mass;
-    
+    std::vector<double> mlsq(epack.eval.size());
+    for(int i=0;i<epack.eval.size();i++){
+        mlsq[i]=(epack.eval[i]-mass*mass) * mass;
+    }
+    DeflatedGuesser<FermionField> LLsub(epack.evec, mlsq);
+    FermionField tmp_e(env().getRbGrid());
+    FermionField tmp_o(env().getRbGrid());
+
     envGetTmp(A2A, a2a);
     
     // Do spatial gammas only
@@ -261,17 +268,13 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                     solver(sol, tmp);
                     // subtract the low modes
                     sub = Zero();
-                    for (int i=0;i<2*Nl_;i++) {
-                        std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
-                        const FermionField& tmp2 = v[i];
-                        // eval of unpreconditioned Dirac op
-                        eval = i%2 ? eval : conjugate(eval);
-                        // need to subtract |l><l|/lambda_l |src>, so
-                        // mult by eval* since v already has 1/eval
-                        axpy(sub,TensorRemove(innerProduct(tmp2,tmp)) * eval,tmp2,sub);
-                    }
-                    sol -= sub;
-
+                    pickCheckerboard(Even,tmp_e,tmp);
+                    action.Meooe(tmp_e,tmp_o);
+                    LLsub(tmp_o,tmp_e);
+                    action.Meooe(tmp_e,tmp_o);// tmp_o is now even
+                    setCheckerboard(sub,tmp_o);
+                    sol += sub;
+                    //LOG(Message) << "Solution " << sol << std::endl;
                     // take inner-product with eigenbra on all time slices
                     tmp = Cshift(w, mu, 1);
                     tmp2 = Umu[mu] * tmp;
@@ -297,16 +300,12 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 
                     solver(sol, tmp);
                     sub = Zero();
-                    for (int i=0;i<2*Nl_;i++) {
-                        std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
-                        const FermionField& tmp2 = v[i];
-                        // eval of unpreconditioned Dirac op
-                        eval = i%2 ? eval : conjugate(eval);
-                        // need to subtract |l><l|/lambda_l |src>, so
-                        // mult by eval* since v already has 1/eval
-                        axpy(sub,TensorRemove(innerProduct(tmp2,tmp)) * eval,tmp2,sub);
-                    }
-                    sol -= sub;
+                    pickCheckerboard(Even,tmp_e,tmp);
+                    action.Meooe(tmp_e,tmp_o);
+                    LLsub(tmp_o,tmp_e);
+                    action.Meooe(tmp_e,tmp_o);// tmp_o is now even
+                    setCheckerboard(sub,tmp_o);
+                    sol += sub;
                     
                     // take inner-product with eigenmode on all time slices
                     tmp = Cshift(w, mu, 1);

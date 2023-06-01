@@ -68,8 +68,6 @@ public:
                                     std::string, eigenPack,
                                     std::string, action,
                                     std::string, solver,
-                                    bool, sub,
-                                    bool, high,
                                     double, mass,
                                     int, inc,
                                     int, tinc);
@@ -193,10 +191,16 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
     auto &epack = envGet(BaseFermionEigenPack<FImpl1>, par().eigenPack);
     auto &action = envGet(FermionOperator<FImpl1>, par().action); // for mult by Meo, Moe
     auto &solver  = envGet(Solver, par().solver);
+    double mass = par().mass;
+    std::vector<double> mlsq(epack.eval.size());
+    for(int i=0;i<epack.eval.size();i++){
+        mlsq[i]=(epack.eval[i]-mass*mass) * mass;
+    }
+    DeflatedGuesser<FermionField> LLsub(epack.evec, mlsq);
+    FermionField tmp_e(env().getRbGrid());
+    FermionField tmp_o(env().getRbGrid());
     envGetTmp(A2A, a2a);
     
-    double mass = par().mass;
-
     envGetTmp(LatticeComplex, corr);
     envGetTmp(LatticeComplex, herm_phase);
     envGetTmp(PropagatorField1, q1);
@@ -297,17 +301,14 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
                         solver(sol, source);
                         // subtract the low modes
                         sub = Zero();
-                        for (int i=0;i<2*Nl_;i++) {
-                            const FermionField& tmp = w[i];
-                            // eval of unpreconditioned Dirac op
-                            std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
-                            eval = i%2==0 ? 1.0/eval : 1.0/conjugate(eval);
-                            axpy(sub,TensorRemove(innerProduct(tmp,source)) * eval,tmp,sub);
-                        }
-                        if(par().sub && par().high){
-                            sol -= sub;
-                        } else {
-                            sol = sub;
+                        // fix up low-mode subtraction for even sites
+                        if((x+y+z+t)%2==0){
+                            pickCheckerboard(Even,tmp_e,source);
+                            action.Meooe(tmp_e,tmp_o);
+                            LLsub(tmp_o,tmp_e);
+                            action.Meooe(tmp_e,tmp_o);// tmp_o is now even
+                            setCheckerboard(sub,tmp_o);
+                            sol += sub;
                         }
                         FermToProp<FImpl1>(q1, sol, c);
                     }
@@ -331,19 +332,15 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
                             pokeSite(Csrc,source,srcSite);
                             sol = Zero();
                             solver(sol, source);
-                            // subtract the low modes
-                            sub = Zero();
-                            for (int i=0;i<2*Nl_;i++) {
-                                const FermionField& tmp = w[i];
-                                // eval of unpreconditioned Dirac op
-                                std::complex<double> eval(mass,sqrt(epack.eval[i/2]-mass*mass));
-                                eval = i%2==0 ? 1.0/eval : 1.0/conjugate(eval);
-                                axpy(sub,TensorRemove(innerProduct(tmp,source)) * eval,tmp,sub);
-                            }
-                            if(par().sub){
-                                sol -= sub;
-                            } else {
-                                sol = sub;
+                            // fix up low-mode subtraction for odd sites
+                            if((x+y+z+t)%2){
+                                sub = Zero();
+                                pickCheckerboard(Even,tmp_e,source);
+                                action.Meooe(tmp_e,tmp_o);
+                                LLsub(tmp_o,tmp_e);
+                                action.Meooe(tmp_e,tmp_o);// tmp_o is now even
+                                setCheckerboard(sub,tmp_o);
+                                sol += sub;
                             }
                             FermToProp<FImpl1>(q2, sol, c);
                         }
