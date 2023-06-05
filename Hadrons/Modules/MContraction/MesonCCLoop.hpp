@@ -249,17 +249,7 @@ void TStagMesonCCLoop<FImpl1, FImpl2>::execute(void)
     }
 
     int Nl_ = epack.evec.size();
-    // for full dirac op low mode sub
-    std::vector<FermionField> w(2*Nl_,env().getGrid());
     FermionField sub(env().getGrid());
-    for (unsigned int il = 0; il < Nl_; il++)
-    {
-        // eval of unpreconditioned Dirac op
-        std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
-        a2a.makeLowModeW(w[2*il], epack.evec[il], eval);
-        // construct -lambda evec
-        a2a.makeLowModeW(w[2*il+1], epack.evec[il], eval, 1);
-    }
     // loop over source position
     // assumed to be Even for now
     for(int t=0; t<nt;t+=par().tinc){
