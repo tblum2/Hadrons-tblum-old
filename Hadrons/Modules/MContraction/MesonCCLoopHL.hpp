@@ -263,7 +263,6 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                     action.Meooe(tmp_e,tmp_o);// tmp_o is now even
                     setCheckerboard(sub,tmp_o);
                     sol += sub;
-                    //LOG(Message) << "Solution " << sol << std::endl;
                     // take inner-product with eigenbra on all time slices
                     tmp = Cshift(w, mu, 1);
                     tmp2 = Umu[mu] * tmp;
