@@ -65,7 +65,7 @@ public:
 };
 
 template <typename FImpl1, typename FImpl2>
-class TStagMesonLoopCCHL5d: public Module<MesonLoopCCHL5DPar>
+class TStagMesonLoopCCHL5D: public Module<MesonLoopCCHL5DPar>
 {
 public:
     typedef typename FImpl1::FermionField FermionField;
@@ -85,9 +85,9 @@ public:
     };
 public:
     // constructor
-    TStagMesonLoopCCHL5d(const std::string name);
+    TStagMesonLoopCCHL5D(const std::string name);
     // destructor
-    virtual ~TStagMesonLoopCCHL5d(void) {};
+    virtual ~TStagMesonLoopCCHL5D(void) {};
     // dependencies/products
     virtual std::vector<std::string> getInput(void);
     virtual std::vector<std::string> getOutput(void);
@@ -105,20 +105,20 @@ private:
     //Solver       *solver_{nullptr};
 };
 
-MODULE_REGISTER_TMP(StagMesonLoopCCHL5d, ARG(TStagMesonLoopCCHL5d<STAGIMPL, STAGIMPL>), MContraction);
+MODULE_REGISTER_TMP(StagMesonLoopCCHL5D, ARG(TStagMesonLoopCCHL5D<STAGIMPL, STAGIMPL>), MContraction);
 
 /******************************************************************************
- *                           TStagMesonLoopCCHL5d implementation                      *
+ *                           TStagMesonLoopCCHL5D implementation                      *
  ******************************************************************************/
 // constructor /////////////////////////////////////////////////////////////////
 template <typename FImpl1, typename FImpl2>
-TStagMesonLoopCCHL5d<FImpl1, FImpl2>::TStagMesonLoopCCHL5d(const std::string name)
+TStagMesonLoopCCHL5D<FImpl1, FImpl2>::TStagMesonLoopCCHL5D(const std::string name)
 : Module<MesonLoopCCHL5DPar>(name)
 {}
 
 // dependencies/products ///////////////////////////////////////////////////////
 template <typename FImpl1, typename FImpl2>
-std::vector<std::string> TStagMesonLoopCCHL5d<FImpl1, FImpl2>::getInput(void)
+std::vector<std::string> TStagMesonLoopCCHL5D<FImpl1, FImpl2>::getInput(void)
 {
     std::vector<std::string> input = {par().gauge, par().action, par().action5D};
     std::string sub_string;
@@ -132,7 +132,7 @@ std::vector<std::string> TStagMesonLoopCCHL5d<FImpl1, FImpl2>::getInput(void)
 }
 
 template <typename FImpl1, typename FImpl2>
-std::vector<std::string> TStagMesonLoopCCHL5d<FImpl1, FImpl2>::getOutput(void)
+std::vector<std::string> TStagMesonLoopCCHL5D<FImpl1, FImpl2>::getOutput(void)
 {
     std::vector<std::string> output = {};
 
@@ -141,7 +141,7 @@ std::vector<std::string> TStagMesonLoopCCHL5d<FImpl1, FImpl2>::getOutput(void)
 
 // setup ///////////////////////////////////////////////////////////////////
 template <typename FImpl1, typename FImpl2>
-void TStagMesonLoopCCHL5d<FImpl1, FImpl2>::setup(void)
+void TStagMesonLoopCCHL5D<FImpl1, FImpl2>::setup(void)
 {
     
     auto        &action     = envGet(FMat, par().action);
@@ -163,7 +163,7 @@ void TStagMesonLoopCCHL5d<FImpl1, FImpl2>::setup(void)
 
 // execution ///////////////////////////////////////////////////////////////////
 template <typename FImpl1, typename FImpl2>
-void TStagMesonLoopCCHL5d<FImpl1, FImpl2>::execute(void)
+void TStagMesonLoopCCHL5D<FImpl1, FImpl2>::execute(void)
 {
     LOG(Message) << "Computing Conserved Current Stag meson contractions " << std::endl;
 
@@ -277,12 +277,12 @@ void TStagMesonLoopCCHL5d<FImpl1, FImpl2>::execute(void)
         // loop over source time slices
         for(int ts=0; ts<nt;ts+=par().tinc){
             
-            LOG(Message) << "StagMesonLoopCCHL5d src_t " << ts << std::endl;
+            LOG(Message) << "StagMesonLoopCCHL5D src_t " << ts << std::endl;
 
             // note that for 5d vecs, mu=x,y,z are 1,2,3
             for(int mu=0;mu<3;mu++){
 
-                LOG(Message) << "StagMesonLoopCCHL5d src_mu " << mu << std::endl;
+                LOG(Message) << "StagMesonLoopCCHL5D src_mu " << mu << std::endl;
                 tmp = where((t5d == ts), source, source*0.);
                 for(int s=0;s<Ls;s++){
                     ExtractSlice(w,tmp,s,0);

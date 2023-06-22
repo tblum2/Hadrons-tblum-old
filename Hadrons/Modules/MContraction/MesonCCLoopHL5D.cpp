@@ -4,4 +4,4 @@ using namespace Grid;
 using namespace Hadrons;
 using namespace MContraction;
 
-template class Grid::Hadrons::MContraction::TStagMesonLoopCCHL5d<STAGIMPL,STAGIMPL>;
+template class Grid::Hadrons::MContraction::TStagMesonLoopCCHL5D<STAGIMPL,STAGIMPL>;
