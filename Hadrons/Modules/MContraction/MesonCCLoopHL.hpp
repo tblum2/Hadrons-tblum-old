@@ -59,6 +59,8 @@ public:
                                     std::string, solver,
                                     std::string, action,
                                     double, mass,
+                                    int, numHits,
+                                    int, blockSize,
                                     int, tinc);
 };
 
@@ -139,11 +141,12 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::setup(void)
 {
     
     auto        &action     = envGet(FMat, par().action);
-    //auto        &solver     = envGet(Solver, par().solver + "_subtract");
     auto        &solver     = envGet(Solver, par().solver);
     envTmp(A2A, "a2a", 1, action, solver);
     
-    envTmpLat(FermionField, "source");
+    envTmpLat(FermionField, "srcb");
+    envTmpLat(FermionField, "snkb");
+    envTmpLat(FermionField, "sub");
     envTmpLat(FermionField, "tmp");
     envTmpLat(FermionField, "tmp2");
     envTmpLat(FermionField, "sol");
@@ -195,11 +198,13 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     LatticeComplex phases(U.Grid());
     std::vector<LatticeColourMatrix> Umu(3,U.Grid());
     // source, solution
-    envGetTmp(FermionField, source);
+    envGetTmp(FermionField, srcb);
+    envGetTmp(FermionField, snkb);
     envGetTmp(FermionField, tmp);
     envGetTmp(FermionField, tmp2);
     envGetTmp(FermionField, sol);
     envGetTmp(FermionField, solshift);
+    envGetTmp(FermionField, sub);
     envGetTmp(FermionField, w);
     
     std::string outFileName;
@@ -221,23 +226,48 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     }
 
     int Nl_ = epack.evec.size();
-    FermionField sub(env().getGrid());
-    for (unsigned int il = 0; il < Nl_; il++)
-    {
-        //
-        std::complex<double> eval(mass,sqrt(epack.eval[il]-mass*mass));
-        // both plus/minus evecs
-        for(int pm=0;pm<2;pm++){
+    // loop over hits
+    for(int ih=0;ih<par().numHits;ih++){
+        
+        // loop over blocks of evecs
+        for (unsigned int ib = 0; ib < 2*Nl_; ib+=par().blockSize)
+        {
+            // sum evecs over block
+            srcb = 0.;
+            snkb = 0.;
+            for(int il=ib;il<ib+par().blockSize;il++){
+                
+                // add evecs with Z2 random numbers, 1 for each eigenvector
+                // include sqrt(|i lambda+m|) for "balance" a'la Luchang
+                // phase can go in source (below)
+                Complex eta;
+                bernoulli(rngSerial(), eta);
+                Complex shift(1., 1.);
+                eta = (2.*eta - shift)*(1./::sqrt(2.));
+                std::cout<<"z2("<<il<<")="<<eta<<std::endl;
+                eta /= pow(epack.eval[il/2], 0.25);
             
-            LOG(Message) << "Eigenvector " << 2*il+pm << std::endl;
+                std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
+                double arg=std::arg(eval);
+                std::complex<double> phase(cos(arg),sin(arg));
+                
+                // do plus/minus evecs
+                int pm = il%2;
+                
+                LOG(Message) << "Eigenvector " << il << std::endl;
 
-            // construct full lattice evec as 4d source (no 1/lambda here)
-            a2a.makeLowModeW(w, epack.evec[il], eval, pm);
-            
-            // -lambda eigenvalue
-            if(pm){
-                ComplexD cc = conjugate(eval);
-                eval = cc;
+                // construct full lattice evec as 4d source (no 1/lambda here)
+                a2a.makeLowModeW(w, epack.evec[il/2], eval, pm);
+                
+                // -lambda eigenvalue
+                if(pm){
+                    phase=conjugate(phase);
+                }
+                // source and sink block vectors
+                w *= eta;
+                snkb += w;
+                w *= 1./phase;
+                srcb += w;
             }
             // loop over source time slices
             for(int ts=0; ts<nt;ts+=par().tinc){
@@ -248,7 +278,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 
                     LOG(Message) << "StagMesonLoopCCHLHL src_mu " << mu << std::endl;
                     
-                    tmp = where(t == ts, w, w*0.);
+                    tmp = where(t == ts, srcb, srcb*0.);
                     tmp2 = adj(Umu[mu]) * tmp;
                    
                     // shift source at x to x+mu
@@ -264,24 +294,24 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                     setCheckerboard(sub,tmp_o);
                     sol += sub;
                     // take inner-product with eigenbra on all time slices
-                    tmp = Cshift(w, mu, 1);
+                    tmp = Cshift(snkb, mu, 1);
                     tmp2 = Umu[mu] * tmp;
                     sliceInnerProductVector(corr,tmp2,sol,3);
                     for(int tsnk=0; tsnk<nt; tsnk++){
-                        ComplexD cc = corr[tsnk] / eval;
+                        ComplexD cc = corr[tsnk];
                         result[mu].corr[(tsnk-ts+nt)%nt] += cc;
                     }
                     
                     solshift=Cshift(sol, mu, 1);
                     // take inner-product with eigenbra on all time slices
-                    tmp = adj(Umu[mu]) * w;
+                    tmp = adj(Umu[mu]) * snkb;
                     sliceInnerProductVector(corr,tmp,solshift,3);
                     for(int tsnk=0; tsnk<nt; tsnk++){
-                        ComplexD cc = corr[tsnk] / eval;
+                        ComplexD cc = corr[tsnk];
                         result[mu].corr[(tsnk-ts+nt)%nt] += cc;
                     }
 
-                    tmp = where(t == ts, w, w*0.);
+                    tmp = where(t == ts, srcb, srcb*0.);
                     // shift source
                     tmp2 = Cshift(tmp, mu, 1);
                     tmp = Umu[mu] * tmp2;
@@ -296,20 +326,20 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                     sol += sub;
                     
                     // take inner-product with eigenmode on all time slices
-                    tmp = Cshift(w, mu, 1);
+                    tmp = Cshift(snkb, mu, 1);
                     tmp2 = Umu[mu] * tmp;
                     sliceInnerProductVector(corr,tmp2,sol,3);
                     for(int tsnk=0; tsnk<nt; tsnk++){
-                        ComplexD cc = corr[tsnk] / eval;
+                        ComplexD cc = corr[tsnk];
                         result[mu].corr[(tsnk-ts+nt)%nt] += cc;
                     }
 
                     solshift=Cshift(sol, mu, 1);
                     // take inner-product with eigenmode on all time slices
-                    tmp = adj(Umu[mu]) * w;
+                    tmp = adj(Umu[mu]) * snkb;
                     sliceInnerProductVector(corr,tmp,solshift,3);
                     for(int tsnk=0; tsnk<nt; tsnk++){
-                        ComplexD cc = corr[tsnk] / eval;
+                        ComplexD cc = corr[tsnk];
                         result[mu].corr[(tsnk-ts+nt)%nt] += cc;
                     }
                 }
@@ -321,6 +351,8 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
         if(U.Grid()->IsBoss()){
             makeFileDir(par().output);
             outFileName = par().output+"HLcc_2pt_mu"+std::to_string(i);
+            for(int t=0; t<nt; t++)
+                result[i].corr[t] /= par().numHits;
             saveResult(outFileName, "HLCC", result[i]);
         }
     }
