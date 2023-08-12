@@ -227,6 +227,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 
     int Nl_ = epack.evec.size();
     // loop over hits
+    LOG(Message) << "Doing " << par().numHits << " hits" << std::endl;
     for(int ih=0;ih<par().numHits;ih++){
         
         // loop over blocks of evecs
@@ -244,7 +245,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                 bernoulli(rngSerial(), eta);
                 Complex shift(1., 1.);
                 eta = (2.*eta - shift)*(1./::sqrt(2.));
-                std::cout<<"z2("<<il<<")="<<eta<<std::endl;
+                //std::cout<<"z2("<<il<<")="<<eta<<std::endl;
                 eta /= pow(epack.eval[il/2], 0.25);
             
                 std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
@@ -254,7 +255,7 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                 // do plus/minus evecs
                 int pm = il%2;
                 
-                LOG(Message) << "Eigenvector " << il << std::endl;
+                //LOG(Message) << "Eigenvector " << il << std::endl;
 
                 // construct full lattice evec as 4d source (no 1/lambda here)
                 a2a.makeLowModeW(w, epack.evec[il/2], eval, pm);
