@@ -226,60 +226,58 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     }
 
     int Nl_ = epack.evec.size();
-    
-    // loop over source time slices
-    for(int ts=0; ts<nt;ts+=par().tinc){
+    // loop over hits
+    LOG(Message) << "Doing " << par().numHits << " hits" << std::endl;
+    for(int ih=0;ih<par().numHits;ih++){
         
-        LOG(Message) << "StagMesonLoopCCHLHL src_t " << ts << std::endl;
+        // loop over blocks of evecs
+        for (unsigned int ib = 0; ib < 2*Nl_; ib+=par().blockSize)
+        {
+            // sum evecs over block
+            srcb = 0.;
+            snkb = 0.;
+            for(int il=ib;il<ib+par().blockSize;il++){
+                
+                // add evecs with Z2 random numbers, 1 for each eigenvector
+                // include sqrt(|i lambda+m|) for "balance" a'la Luchang
+                // phase can go in source (below)
+                Complex eta;
+                bernoulli(rngSerial(), eta);
+                Complex shift(1., 1.);
+                eta = (2.*eta - shift)*(1./::sqrt(2.));
+                //std::cout<<"z2("<<il<<")="<<eta<<std::endl;
+                eta /= pow(epack.eval[il/2], 0.25);
+            
+                std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
+                double arg=std::arg(eval);
+                std::complex<double> phase(cos(arg),sin(arg));
+                
+                // do plus/minus evecs
+                int pm = il%2;
+                
+                //LOG(Message) << "Eigenvector " << il << std::endl;
 
-        for(int mu=0;mu<3;mu++){
+                // construct full lattice evec as 4d source (no 1/lambda here)
+                a2a.makeLowModeW(w, epack.evec[il/2], eval, pm);
+                
+                // -lambda eigenvalue
+                if(pm){
+                    phase=conjugate(phase);
+                }
+                // source and sink block vectors
+                w *= eta;
+                snkb += w;
+                w *= 1./phase;
+                srcb += w;
+            }
+            // loop over source time slices
+            for(int ts=0; ts<nt;ts+=par().tinc){
+                
+                LOG(Message) << "StagMesonLoopCCHLHL src_t " << ts << std::endl;
 
-            LOG(Message) << "StagMesonLoopCCHLHL src_mu " << mu << std::endl;
-            // loop over hits
-            LOG(Message) << "Doing " << par().numHits << " hits" << std::endl;
-            for(int ih=0;ih<par().numHits;ih++){
-        
-                // loop over blocks of evecs
-                for (unsigned int ib = 0; ib < 2*Nl_; ib+=par().blockSize)
-                {
-                    // sum evecs over block
-                    srcb = 0.;
-                    snkb = 0.;
-                    for(int il=ib;il<ib+par().blockSize;il++){
-                        
-                        // add evecs with Z2 random numbers, 1 for each eigenvector
-                        // include sqrt(|i lambda+m|) for "balance" a'la Luchang
-                        // phase can go in source (below)
-                        Complex eta;
-                        bernoulli(rngSerial(), eta);
-                        Complex shift(1., 1.);
-                        eta = (2.*eta - shift)*(1./::sqrt(2.));
-                        //std::cout<<"z2("<<il<<")="<<eta<<std::endl;
-                        eta /= pow(epack.eval[il/2], 0.25);
-                    
-                        std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
-                        double arg=std::arg(eval);
-                        std::complex<double> phase(cos(arg),sin(arg));
-                        
-                        // do plus/minus evecs
-                        int pm = il%2;
-                        
-                        //LOG(Message) << "Eigenvector " << il << std::endl;
+                for(int mu=0;mu<3;mu++){
 
-                        // construct full lattice evec as 4d source (no 1/lambda here)
-                        a2a.makeLowModeW(w, epack.evec[il/2], eval, pm);
-                        
-                        // -lambda eigenvalue
-                        if(pm){
-                            phase=conjugate(phase);
-                        }
-                        // source and sink block vectors
-                        w *= eta;
-                        snkb += w;
-                        w *= 1./phase;
-                        srcb += w;
-                    }
-
+                    LOG(Message) << "StagMesonLoopCCHLHL src_mu " << mu << std::endl;
                     
                     tmp = where(t == ts, srcb, srcb*0.);
                     tmp2 = adj(Umu[mu]) * tmp;
