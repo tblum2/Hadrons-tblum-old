@@ -208,7 +208,33 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     envGetTmp(FermionField, w);
     
     std::string outFileName;
-    
+    int Nl_ = epack.evec.size();
+
+    // save randoms so exact and sub use same
+    std::vector<Complex> eta(nt*3*par().numHits*Nl_*2);
+    int numb=2*Nl_/par().blockSize;
+    for(int ts=0; ts<nt;ts++){
+        for(int mu=0;mu<3;mu++){
+            for(int ih=0;ih<par().numHits;ih++){
+                for (unsigned int ib = 0; ib < numb; ib++){
+                    int start=ib*par().blockSize;
+                    int end=start+par().blockSize;
+                    for(int il=start;il<end;il++){
+                        int idx=il+par().blockSize*(ib+numb*(ih+par().numHits*(mu+3*ts)));
+                        bernoulli(rngSerial(), eta[idx]);
+                        Complex shift(1., 1.);
+                        eta[idx] = (2.*eta[idx] - shift)*(1./::sqrt(2.));
+                        LOG(Message) << "il " << il << std::endl;
+                        LOG(Message) << "ib " << ib << std::endl;
+                        LOG(Message) << "ih " << ih << std::endl;
+                        LOG(Message) << "mu " << mu << std::endl;
+                        LOG(Message) << "ts " << ts << std::endl;
+                        LOG(Message) << "eta idx " << idx << std::endl;
+                    }
+                }
+            }
+        }
+    }
     for(int mu=0;mu<3;mu++){
 
         //staggered phases go into links
@@ -225,8 +251,6 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
         Umu[mu] *= phases;
     }
 
-    int Nl_ = epack.evec.size();
-    
     // loop over source time slices
     for(int ts=0; ts<nt;ts+=par().tinc){
         
@@ -240,22 +264,25 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
             for(int ih=0;ih<par().numHits;ih++){
         
                 // loop over blocks of evecs
-                for (unsigned int ib = 0; ib < 2*Nl_; ib+=par().blockSize)
-                {
+                for (unsigned int ib = 0; ib < numb; ib++){
+                    
                     // sum evecs over block
                     srcb = 0.;
                     snkb = 0.;
-                    for(int il=ib;il<ib+par().blockSize;il++){
+                    int start=ib*par().blockSize;
+                    int end=start+par().blockSize;
+                    for(int il=start;il<end;il++){
                         
                         // add evecs with Z2 random numbers, 1 for each eigenvector
                         // include sqrt(|i lambda+m|) for "balance" a'la Luchang
                         // phase can go in source (below)
-                        Complex eta;
-                        bernoulli(rngSerial(), eta);
-                        Complex shift(1., 1.);
-                        eta = (2.*eta - shift)*(1./::sqrt(2.));
+                        //Complex eta;
+                        //bernoulli(rngSerial(), eta);
+                        //Complex shift(1., 1.);
+                        //eta = (2.*eta - shift)*(1./::sqrt(2.));
                         //std::cout<<"z2("<<il<<")="<<eta<<std::endl;
-                        eta /= pow(epack.eval[il/2], 0.25);
+                        int idx=il+par().blockSize*(ib+numb*(ih+par().numHits*(mu+3*ts)));
+                        eta[idx] /= pow(epack.eval[il/2], 0.25);
                     
                         std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
                         double arg=std::arg(eval);
@@ -274,12 +301,12 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                             phase=conjugate(phase);
                         }
                         // source and sink block vectors
-                        w *= eta;
+                        w *= eta[idx];
                         snkb += w;
                         w *= 1./phase;
                         srcb += w;
                     }
-
+                    // split grid here?
                     
                     tmp = where(t == ts, srcb, srcb*0.);
                     tmp2 = adj(Umu[mu]) * tmp;
