@@ -217,19 +217,18 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
         for(int mu=0;mu<3;mu++){
             for(int ih=0;ih<par().numHits;ih++){
                 for (unsigned int ib = 0; ib < numb; ib++){
-                    int start=ib*par().blockSize;
-                    int end=start+par().blockSize;
-                    for(int il=start;il<end;il++){
+                    
+                    for(int il=0;il<par().blockSize;il++){
                         int idx=il+par().blockSize*(ib+numb*(ih+par().numHits*(mu+3*ts)));
                         bernoulli(rngSerial(), eta[idx]);
                         Complex shift(1., 1.);
                         eta[idx] = (2.*eta[idx] - shift)*(1./::sqrt(2.));
-                        LOG(Message) << "il " << il << std::endl;
-                        LOG(Message) << "ib " << ib << std::endl;
-                        LOG(Message) << "ih " << ih << std::endl;
-                        LOG(Message) << "mu " << mu << std::endl;
-                        LOG(Message) << "ts " << ts << std::endl;
-                        LOG(Message) << "eta idx " << idx << std::endl;
+//                        LOG(Message) << "il " << il << std::endl;
+//                        LOG(Message) << "ib " << ib << std::endl;
+//                        LOG(Message) << "ih " << ih << std::endl;
+//                        LOG(Message) << "mu " << mu << std::endl;
+//                        LOG(Message) << "ts " << ts << std::endl;
+//                        LOG(Message) << "eta idx " << idx << std::endl;
                     }
                 }
             }
@@ -269,32 +268,21 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                     // sum evecs over block
                     srcb = 0.;
                     snkb = 0.;
-                    int start=ib*par().blockSize;
-                    int end=start+par().blockSize;
-                    for(int il=start;il<end;il++){
+                    for(int il=0;il<par().blockSize;il++){
                         
-                        // add evecs with Z2 random numbers, 1 for each eigenvector
-                        // include sqrt(|i lambda+m|) for "balance" a'la Luchang
-                        // phase can go in source (below)
-                        //Complex eta;
-                        //bernoulli(rngSerial(), eta);
-                        //Complex shift(1., 1.);
-                        //eta = (2.*eta - shift)*(1./::sqrt(2.));
-                        //std::cout<<"z2("<<il<<")="<<eta<<std::endl;
+                        int ivec = il+ib*par().blockSize;
                         int idx=il+par().blockSize*(ib+numb*(ih+par().numHits*(mu+3*ts)));
-                        eta[idx] /= pow(epack.eval[il/2], 0.25);
+                        eta[idx] /= pow(epack.eval[ivec/2], 0.25);
                     
-                        std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
+                        std::complex<double> eval(mass,sqrt(epack.eval[ivec/2]-mass*mass));
                         double arg=std::arg(eval);
                         std::complex<double> phase(cos(arg),sin(arg));
                         
                         // do plus/minus evecs
-                        int pm = il%2;
+                        int pm = ivec%2;
                         
-                        //LOG(Message) << "Eigenvector " << il << std::endl;
-
                         // construct full lattice evec as 4d source (no 1/lambda here)
-                        a2a.makeLowModeW(w, epack.evec[il/2], eval, pm);
+                        a2a.makeLowModeW(w, epack.evec[ivec/2], eval, pm);
                         
                         // -lambda eigenvalue
                         if(pm){
