@@ -100,8 +100,9 @@ std::string ModuleBase::makeSeedString(void)
     {
         seed += vm().getRunId() + "-";
     }
-    seed += getName() + "-" + std::to_string(vm().getTrajectory());
-
+    //seed += getName() + "-" + std::to_string(vm().getTrajectory());
+    seed += std::to_string(vm().getTrajectory());
+    LOG(Message) << "WARNING: Seeding 4D RNG with RunId + Traj ONLY " << std::endl;
     return seed;
 }
 
