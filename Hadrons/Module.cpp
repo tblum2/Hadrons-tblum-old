@@ -102,7 +102,7 @@ std::string ModuleBase::makeSeedString(void)
     }
     //seed += getName() + "-" + std::to_string(vm().getTrajectory());
     seed += std::to_string(vm().getTrajectory());
-    LOG(Message) << "WARNING: Seeding 4D RNG with RunId + Traj ONLY " << std::endl;
+    
     return seed;
 }
 
@@ -116,6 +116,7 @@ GridParallelRNG & ModuleBase::rng4d(void)
         seed_ = makeSeedString();
         LOG(Message) << "Seeding 4D RNG " << &r << " with string '" 
                      << seed_ << "'" << std::endl;
+        LOG(Message) << "WARNING: Seeding 4D RNG with RunId + Traj ONLY " << std::endl;
         r.SeedUniqueString(seed_);
     }
 
