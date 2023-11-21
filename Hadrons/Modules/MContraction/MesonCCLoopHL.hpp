@@ -251,17 +251,18 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     }
 
     // loop over source time slices
-    for(int ts=0; ts<nt;ts+=par().tinc){
+    for(int mu=0;mu<3;mu++){
+
+        LOG(Message) << "StagMesonLoopCCHL src_mu " << mu << std::endl;
+        for(int ts=0; ts<nt;ts+=par().tinc){
         
-        LOG(Message) << "StagMesonLoopCCHLHL src_t " << ts << std::endl;
+            LOG(Message) << "StagMesonLoopCCHL src_t " << ts << std::endl;
 
-        for(int mu=0;mu<3;mu++){
-
-            LOG(Message) << "StagMesonLoopCCHLHL src_mu " << mu << std::endl;
             // loop over hits
-            LOG(Message) << "Doing " << par().numHits << " hits" << std::endl;
             for(int ih=0;ih<par().numHits;ih++){
-        
+                
+                LOG(Message) << "StagMesonLoopCCHL hit " << ih << std::endl;
+                
                 // loop over blocks of evecs
                 for (unsigned int ib = 0; ib < numb; ib++){
                     
@@ -363,15 +364,12 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
                 }
             }
         }
-    }
-    
-    for (int i = 0; i < 3; ++i){
         if(U.Grid()->IsBoss()){
             makeFileDir(par().output);
-            outFileName = par().output+"HLcc_2pt_mu"+std::to_string(i);
+            outFileName = par().output+"HLcc_2pt_mu"+std::to_string(mu);
             for(int t=0; t<nt; t++)
-                result[i].corr[t] /= par().numHits;
-            saveResult(outFileName, "HLCC", result[i]);
+                result[mu].corr[t] /= par().numHits;
+            saveResult(outFileName, "HLCC", result[mu]);
         }
     }
 }
