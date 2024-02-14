@@ -252,6 +252,14 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
 
     // loop over source time slices
     for(int mu=0;mu<3;mu++){
+        
+        // check if we already did this mu
+        std::string file = par().output+"HLcc_2pt_mu"+std::to_string(mu);
+        bool f1 = exists(file);
+        if(f1){
+            std::cout << "Skipping mu " << mu << std::endl;
+            continue;
+        }
 
         LOG(Message) << "StagMesonLoopCCHL src_mu " << mu << std::endl;
         for(int ts=0; ts<nt;ts+=par().tinc){
