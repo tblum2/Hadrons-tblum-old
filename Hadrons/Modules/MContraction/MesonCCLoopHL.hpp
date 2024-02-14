@@ -254,8 +254,8 @@ void TStagMesonLoopCCHL<FImpl1, FImpl2>::execute(void)
     for(int mu=0;mu<3;mu++){
         
         // check if we already did this mu
-        stem = par().output+"HLcc_2pt_mu"+std::to_string(mu);
-        std::string file = resultFilename(stem,"h5");
+        std::string file = par().output+"HLcc_2pt_mu"+std::to_string(mu);
+        file = resultFilename(file,"h5");
         bool f1 = exists(file);
         std::cout<< file << std::endl;
         if(f1){
