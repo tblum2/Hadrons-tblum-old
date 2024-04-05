@@ -602,6 +602,7 @@ void TStagNoEvalA2AVectors<FImpl, Pack>::execute(void)
     // minus lambda contribution from plus
     
     FermionField temp(env().getGrid());
+    FermionField tempRB(env().getRbGrid());
     
     for (unsigned int il = 0; il < Nl_; il++)
     {
@@ -614,8 +615,9 @@ void TStagNoEvalA2AVectors<FImpl, Pack>::execute(void)
         if (Ls == 1)
         {
             if(par().doubleMemory){
-                // construct full eo evec
-                a2a.makeLowModeV(temp, epack.evec[il], eval);
+                // construct full eo evec from Odd
+                pickCheckerboard(Odd,tempRB,epack.evec[il]);
+                a2a.makeLowModeV(temp, tempRB, eval);
                 epack.evec[il]=temp;
             }else{
                 a2a.makeLowModeV(v[il], epack.evec[il], eval);

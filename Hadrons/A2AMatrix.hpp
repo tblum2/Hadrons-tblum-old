@@ -1165,7 +1165,7 @@ void A2AMatrixBlockComputation<T, Field, MetadataType, TIo>
                     
                     START_TIMER("kernel");
                     // only have the positve vectors
-                    kernel(mCacheBlock, mu, Dns, Umu, &evec[(i+ii)], &eval[(j+jj)], orthogDim_, t);
+                    kernel(mCacheBlock, mu, Dns, Umu, &evec[(i+ii)], &evec[(j+jj)], &eval[(j+jj)], orthogDim_, t);
                     STOP_TIMER("kernel");
                     t_kernel += t;
                     flops    += kernel.flops(N_iii, N_jjj);
