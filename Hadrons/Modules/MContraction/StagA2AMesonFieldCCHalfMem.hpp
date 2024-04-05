@@ -94,13 +94,14 @@ public:
                     //LatticeGaugeField &U,
                     FermionOperator<FImpl> &Dns,
                     const LatticeColourMatrix &Umu,
-                    const FermionField *evec,
+                    const FermionField *levec,
+                    const FermionField *revec,
                     const Real *eval,
                     //const Real mass,
                     const unsigned int orthogDim,
                     double &t)
     {
-        A2Autils<FImpl>::StagMesonFieldCCHalfMem(m, mu, Dns, Umu, evec, evec, eval, orthogDim, &t);
+        A2Autils<FImpl>::StagMesonFieldCCHalfMem(m, mu, Dns, Umu, levec, revec, eval, orthogDim, &t);
     }
     void operator()(A2AMatrixSet<T> &m,
                             int mu,
@@ -367,7 +368,7 @@ void TStagA2AMesonFieldCCHalfMem<FImpl>::execute(void)
     Kernel      kernel(gamma_, ph, envGetGrid(FermionField));
 
     envGetTmp(Computation, computation);
-    computation.execute(mu, Dns, Umu, epack.evec, eval, kernel,
+    computation.execute(mu, Dns, Umu, epack.evec, epack.evec, eval, kernel,
                         ionameFn, filenameFn, metadataFn);
     
     // save +eval

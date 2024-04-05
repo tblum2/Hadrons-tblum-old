@@ -88,7 +88,8 @@ public:
                             //LatticeGaugeField &U,
                             FermionOperator<STAGIMPL> &Dns,
                             const LatticeColourMatrix &Umu,
-                            const Field *evec,
+                            const Field *levec,
+                            const Field *revec,
                             const Real *eval,
                             //const Real mass,
                             const unsigned int orthogDim, double &time) = 0;
