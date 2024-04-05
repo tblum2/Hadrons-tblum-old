@@ -367,7 +367,7 @@ void TStagA2AMesonFieldCCHalfMem<FImpl>::execute(void)
     Kernel      kernel(gamma_, ph, envGetGrid(FermionField));
 
     envGetTmp(Computation, computation);
-    computation.execute(mu, Dns, Umu, epack.evec, epack.evec, eval, kernel,
+    computation.execute(mu, Dns, Umu, epack.evec, eval, kernel,
                         ionameFn, filenameFn, metadataFn);
     
     // save +eval
