@@ -108,6 +108,7 @@ public:
                     //LatticeGaugeField &U,
                     const LatticeColourMatrix &Umu,
                     const FermionField *evec,
+                    const FermionField *evec,
                     const Real *eval,
                     //const Real mass,
                     const unsigned int orthogDim, double &time)

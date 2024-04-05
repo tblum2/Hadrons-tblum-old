@@ -1116,7 +1116,8 @@ void A2AMatrixBlockComputation<T, Field, MetadataType, TIo>
           //LatticeGaugeField &U,
           FermionOperator<STAGIMPL> &Dns,
           const LatticeColourMatrix Umu,
-          const std::vector<Field> &evec,
+          const std::vector<Field> &levec,
+          const std::vector<Field> &revec,
           const std::vector<Real> &eval,
           //const Real mass,
           A2AKernel<T, Field> &kernel,
@@ -1167,7 +1168,7 @@ void A2AMatrixBlockComputation<T, Field, MetadataType, TIo>
                     
                     START_TIMER("kernel");
                     // only have the positve vectors
-                    kernel(mCacheBlock, mu, Dns, Umu, &evec[(i+ii)], &evec[(j+jj)], &eval[(j+jj)], orthogDim_, t);
+                    kernel(mCacheBlock, mu, Dns, Umu, &levec[(i+ii)], &revec[(j+jj)], &eval[(j+jj)], orthogDim_, t);
                     STOP_TIMER("kernel");
                     t_kernel += t;
                     flops    += kernel.flops(N_iii, N_jjj);
