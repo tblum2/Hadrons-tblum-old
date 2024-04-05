@@ -1132,8 +1132,8 @@ void A2AMatrixBlockComputation<T, Field, MetadataType, TIo>
     // Total index is sum of these  i+ii+iii etc...
     //////////////////////////////////////////////////////////////////////////
     // only positive lambda vectors explicitly computed
-    int    N_i = evec.size();
-    int    N_j = evec.size();
+    int    N_i = levec.size();
+    int    N_j = revec.size();
     double flops, bytes, t_kernel;
     double nodes = grid_->NodeCount();
     
