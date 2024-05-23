@@ -758,7 +758,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     auto &v=envGet(std::vector<FermionField>,"v");
     auto &w=envGet(std::vector<FermionField>,"w");
-    
+    v[0].Grid()->show_decomposition();
+    w[0].Grid()->show_decomposition();
+    epack.evec[0].Grid()->show_decomposition();
+
     LOG(Message) << "Computing all-to-all vectors using eigenpack " << par().eigenPack << " with " << 2*Nl_ << " low modes " << std::endl;
 
     // Staggered Phases. Do spatial gamma only
@@ -776,7 +779,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     std::random_device rd;  // a seed source for the random number engine
     std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-    std::uniform_int_distribution<uint32_t> uid(0, nt);
+    std::uniform_int_distribution<uint32_t> uid(0, nt-1);
     
     for (int mu=0;mu<3;mu++){
         
@@ -804,16 +807,16 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             
             // Sparsen
             for(int t=0; t<nt;t+=par().tinc){
+                int xshift=uid(gen);
+                int yshift=uid(gen);
+                int zshift=uid(gen);
                 for(int z=0; z<ns;z+=par().inc){
                     for(int y=0; y<ns;y+=par().inc){
                         for(int x=0; x<ns;x+=par().inc){
 
-                            shift=uid(gen);
-                            site[0]=(x+shift+ns)%ns;
-                            shift=uid(gen);
-                            site[1]=(y+shift+ns)%ns;
-                            shift=uid(gen);
-                            site[2]=(z+shift+ns)%ns;
+                            site[0]=(x+xshift+ns)%ns;
+                            site[1]=(y+yshift+ns)%ns;
+                            site[2]=(z+zshift+ns)%ns;
                             site[3]=t;
                             sparseSite[0]=x/par().inc;
                             sparseSite[1]=y/par().inc;
