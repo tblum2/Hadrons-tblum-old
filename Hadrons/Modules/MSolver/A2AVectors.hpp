@@ -702,10 +702,10 @@ std::vector<std::string> TStagSparseA2AVectors<FImpl, Pack>::getInput(void)
 {
     std::vector<std::string> in;
     
-    if (!par().eigenPack.empty())
-    {
-        in.push_back(par().eigenPack);
-    }
+    in.push_back(par().eigenPack);
+    in.push_back(par().gauge);
+    in.push_back(par().action);
+    in.push_back(par().solver);
     
     return in;
 }
