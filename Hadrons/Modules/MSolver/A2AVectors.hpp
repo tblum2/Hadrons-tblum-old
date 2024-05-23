@@ -50,9 +50,12 @@ public:
     GRID_SERIALIZABLE_CLASS_MEMBERS(A2AVectorsPar,
                                     std::string, noise,
                                     std::string, action,
+                                    std::string, gauge,
                                     std::string, eigenPack,
                                     std::string, solver,
                                     std::string, output,
+                                    int, inc,
+                                    int, tinc,
                                     bool, doubleMemory,
                                     double, mass,
                                     bool,        multiFile);
@@ -654,6 +657,189 @@ void TStagNoEvalA2AVectors<FImpl, Pack>::execute(void)
         }
     }
 }
+//
+// Sparsened A2A vectors for staggered conserved current
+//
+template <typename FImpl, typename Pack>
+class TStagSparseA2AVectors : public Module<A2AVectorsPar>
+{
+public:
+    FERM_TYPE_ALIASES(FImpl,);
+    SOLVER_TYPE_ALIASES(FImpl,);
+    typedef A2AVectorsSchurStaggered<FImpl> A2A;
+public:
+    // constructor
+    TStagSparseA2AVectors(const std::string name);
+    // destructor
+    virtual ~TStagSparseA2AVectors(void) {};
+    // dependency relation
+    virtual std::vector<std::string> getInput(void);
+    virtual std::vector<std::string> getOutput(void);
+    // setup
+    virtual void setup(void);
+    // execution
+    virtual void execute(void);
+private:
+    std::string  solverName_;
+    unsigned int Nl_{0};
+};
+
+MODULE_REGISTER_TMP(StagSparseA2AVectors,
+                    ARG(TStagSparseA2AVectors<STAGIMPL, BaseFermionEigenPack<STAGIMPL>>),MSolver);
+
+/******************************************************************************
+ *                       TStagSparseA2AVectors implementation                           *
+ ******************************************************************************/
+// constructor /////////////////////////////////////////////////////////////////
+template <typename FImpl, typename Pack>
+TStagSparseA2AVectors<FImpl, Pack>::TStagSparseA2AVectors(const std::string name)
+: Module<A2AVectorsPar>(name)
+{}
+
+// dependencies/products ///////////////////////////////////////////////////////
+template <typename FImpl, typename Pack>
+std::vector<std::string> TStagSparseA2AVectors<FImpl, Pack>::getInput(void)
+{
+    std::vector<std::string> in;
+    
+    if (!par().eigenPack.empty())
+    {
+        in.push_back(par().eigenPack);
+    }
+    
+    return in;
+}
+
+template <typename FImpl, typename Pack>
+std::vector<std::string> TStagSparseA2AVectors<FImpl, Pack>::getOutput(void)
+{
+    std::vector<std::string> out = {getName() + "sparse_w"};
+    return out;
+}
+
+// setup ///////////////////////////////////////////////////////////////////////
+template <typename FImpl, typename Pack>
+void TStagSparseA2AVectors<FImpl, Pack>::setup(void)
+{
+    auto        &action     = envGet(FMat, par().action);
+    auto        &solver     = envGet(Solver, par().solver);
+    
+    auto &epack = envGet(Pack, par().eigenPack);
+    Nl_ = epack.evec.size();
+    // Sparse Grid
+    
+    // V, W vecs. 2x Nl_ for +-lambda
+    // sparse vectors need sparse grid
+    Coordinate sparseLatSize = envGetGrid(FermionField)->FullDimensions();
+    sparseLatSize[0] /= par().inc;
+    sparseLatSize[1] /= par().inc;
+    sparseLatSize[2] /= par().inc;
+    sparseLatSize[3] /= par().tinc;
+    Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
+    Coordinate mpi_layout  = GridDefaultMpi();
+    GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
+    envCreate(std::vector<FermionField>, "v", 1, 2*Nl_, &sparseGrid);
+    envCreate(std::vector<FermionField>, "w", 1, 2*Nl_, &sparseGrid);
+    envTmp(A2A, "a2a", 1, action, solver);
+}
+
+// execution ///////////////////////////////////////////////////////////////////
+template <typename FImpl, typename Pack>
+void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
+{
+    auto    &action = envGet(FMat, par().action);
+    auto    &U      = envGet(LatticeGaugeField, par().gauge);
+    auto    &solver = envGet(Solver, par().solver);
+    auto    &epack  = envGet(Pack, par().eigenPack);
+    double  mass    = par().mass;
+    int     nt      = env().getDim(Tp);
+    int     ns      = env().getDim(Xp);
+    envGetTmp(A2A, a2a);
+    
+    auto &v=envGet(std::vector<FermionField>,"v");
+    auto &w=envGet(std::vector<FermionField>,"w");
+    
+    LOG(Message) << "Computing all-to-all vectors using eigenpack " << par().eigenPack << " with " << 2*Nl_ << " low modes " << std::endl;
+
+    // Staggered Phases. Do spatial gamma only
+    Lattice<iScalar<vInteger> > x(U.Grid()); LatticeCoordinate(x,0);
+    Lattice<iScalar<vInteger> > y(U.Grid()); LatticeCoordinate(y,1);
+    Lattice<iScalar<vInteger> > lin_z(U.Grid()); lin_z=x+y;
+        
+    ComplexField phases(U.Grid());
+    int shift;
+    ColourVector vec;
+    FermionField temp(U.Grid());
+    FermionField temp2(U.Grid());
+    Coordinate site;
+    Coordinate sparseSite;
+    
+    std::random_device rd;  // a seed source for the random number engine
+    std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
+    std::uniform_int_distribution<uint32_t> uid(0, nt);
+    
+    for (int mu=0;mu<3;mu++){
+        
+        phases=1.0;
+        if(mu==1){
+            phases = where( mod(x    ,2)==(Integer)0, phases,-phases);
+        } else if(mu==2){
+            phases = where( mod(lin_z,2)==(Integer)0, phases,-phases);
+        }
+        LatticeColourMatrix Umu(U.Grid());
+        Umu = PeekIndex<LorentzIndex>(U,mu);
+        Umu *= phases;
+        
+        for (unsigned int il = 0; il < 2*Nl_; il++)
+        {
+            // eval of unpreconditioned Dirac op
+            std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
+            
+            startTimer("V low mode");
+            LOG(Message) << "V vector i = " << il << " (low modes)" << std::endl;
+            a2a.makeLowModeV(temp, epack.evec[il/2], eval, il%2);
+            stopTimer("V low mode");
+            temp2 = Umu*Cshift(temp, mu, 1);
+            temp *= conjugate(eval);// w vector, no eval in denom
+            
+            // Sparsen
+            for(int t=0; t<nt;t+=par().tinc){
+                for(int z=0; z<ns;z+=par().inc){
+                    for(int y=0; y<ns;y+=par().inc){
+                        for(int x=0; x<ns;x+=par().inc){
+
+                            shift=uid(gen);
+                            site[0]=(x+shift+ns)%ns;
+                            shift=uid(gen);
+                            site[1]=(y+shift+ns)%ns;
+                            shift=uid(gen);
+                            site[2]=(z+shift+ns)%ns;
+                            site[3]=t;
+                            sparseSite[0]=x/par().inc;
+                            sparseSite[1]=y/par().inc;
+                            sparseSite[2]=z/par().inc;
+                            sparseSite[3]=t/par().tinc;
+                            if(mu==0){// do v once
+                                peekSite(vec,temp,site);
+                                pokeSite(vec,v[il],sparseSite);
+                            }
+                            peekSite(vec,temp2,site);
+                            pokeSite(vec,w[il],sparseSite);
+                        }
+                    }
+                }
+            }
+        }
+        // I/O
+        startTimer("W I/O");
+        A2AVectorsIo::write(par().output + "_w_mu" + std::to_string(mu), w,                         par().multiFile, vm().getTrajectory());
+        stopTimer("W I/O");
+    }// end mu
+    startTimer("W I/O");
+    A2AVectorsIo::write(par().output + "_v", v,par().multiFile, vm().getTrajectory());
+    stopTimer("W I/O");
+}
+
 END_MODULE_NAMESPACE
 
 END_HADRONS_NAMESPACE
