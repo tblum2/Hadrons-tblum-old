@@ -667,6 +667,7 @@ public:
     FERM_TYPE_ALIASES(FImpl,);
     SOLVER_TYPE_ALIASES(FImpl,);
     typedef A2AVectorsSchurStaggered<FImpl> A2A;
+    typedef typename Grid::NaiveStaggeredFermionR::FermionField SparseFermionField;
 public:
     // constructor
     TStagSparseA2AVectors(const std::string name);
@@ -726,20 +727,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::setup(void)
     
     auto &epack = envGet(Pack, par().eigenPack);
     Nl_ = epack.evec.size();
-    // Sparse Grid
-    
     // V, W vecs. 2x Nl_ for +-lambda
     // sparse vectors need sparse grid
-    Coordinate sparseLatSize = envGetGrid(FermionField)->FullDimensions();
-    sparseLatSize[0] /= par().inc;
-    sparseLatSize[1] /= par().inc;
-    sparseLatSize[2] /= par().inc;
-    sparseLatSize[3] /= par().tinc;
-    Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
-    Coordinate mpi_layout  = GridDefaultMpi();
-    GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
-    envCreate(std::vector<FermionField>, "v", 1, 2*Nl_, &sparseGrid);
-    envCreate(std::vector<FermionField>, "w", 1, 2*Nl_, &sparseGrid);
+    //envCreate(std::vector<SparseFermionField>, "v", 1, 2*Nl_, &sparseGrid);
+    //envCreate(std::vector<SparseFermionField>, "w", 1, 2*Nl_, &sparseGrid);
     envTmp(A2A, "a2a", 1, action, solver);
 }
 
@@ -756,11 +747,17 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     int     ns      = env().getDim(Xp);
     envGetTmp(A2A, a2a);
     
-    auto &v=envGet(std::vector<FermionField>,"v");
-    auto &w=envGet(std::vector<FermionField>,"w");
-    v[0].Grid()->show_decomposition();
-    w[0].Grid()->show_decomposition();
-    epack.evec[0].Grid()->show_decomposition();
+    // Sparse Grid
+    Coordinate sparseLatSize = envGetGrid(FermionField)->FullDimensions();
+    sparseLatSize[0] /= par().inc;
+    sparseLatSize[1] /= par().inc;
+    sparseLatSize[2] /= par().inc;
+    sparseLatSize[3] /= par().tinc;
+    Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
+    Coordinate mpi_layout  = GridDefaultMpi();
+    GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
+    std::vector<SparseFermionField> v(2*Nl_,&sparseGrid);
+    std::vector<SparseFermionField> w(2*Nl_,&sparseGrid);
 
     LOG(Message) << "Computing all-to-all vectors using eigenpack " << par().eigenPack << " with " << 2*Nl_ << " low modes " << std::endl;
 
@@ -774,6 +771,8 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     ColourVector vec;
     FermionField temp(U.Grid());
     FermionField temp2(U.Grid());
+    //SparseFermionField temp3(&sparseGrid);
+    
     Coordinate site;
     Coordinate sparseSite;
     
@@ -802,8 +801,11 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             LOG(Message) << "V vector i = " << il << " (low modes)" << std::endl;
             a2a.makeLowModeV(temp, epack.evec[il/2], eval, il%2);
             stopTimer("V low mode");
+	    // v vec is shifted and * link for conserved current
             temp2 = Umu*Cshift(temp, mu, 1);
-            temp *= conjugate(eval);// w vector, no eval in denom
+            // w vector, no eval in denom
+            il%2 ? eval=conjugate(eval) : eval ;
+            temp *= eval;
             
             // Sparsen
             for(int t=0; t<nt;t+=par().tinc){
