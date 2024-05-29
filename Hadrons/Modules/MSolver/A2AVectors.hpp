@@ -780,6 +780,9 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
     std::uniform_int_distribution<uint32_t> uid(0, nt-1);
     
+    //save for later
+    std::vector<complex<double>> evalM(2*Nl_);
+    
     for (int mu=0;mu<3;mu++){
         
         phases=1.0;
@@ -797,15 +800,17 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             // eval of unpreconditioned Dirac op
             std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
             
-            startTimer("V low mode");
-            LOG(Message) << "V vector i = " << il << " (low modes)" << std::endl;
-            a2a.makeLowModeV(temp, epack.evec[il/2], eval, il%2);
-            stopTimer("V low mode");
-	    // v vec is shifted and * link for conserved current
+            startTimer("W low mode");
+            LOG(Message) << "W vector i = " << il << " (low modes)" << std::endl;
+            // don't divide by lambda. Do it in contraction since it is complex
+            a2a.makeLowModeW(temp, epack.evec[il/2], eval, il%2);
+            stopTimer("W low mode");
+            // v vec is shifted and * link for conserved current
             temp2 = Umu*Cshift(temp, mu, 1);
             // w vector, no eval in denom
             il%2 ? eval=conjugate(eval) : eval ;
-            temp *= eval;
+            evalM[il]=eval;
+            //temp *= eval;
             
             // Sparsen
             for(int t=0; t<nt;t+=par().tinc){
@@ -843,6 +848,24 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     startTimer("W I/O");
     A2AVectorsIo::write(par().output + "_v", v,par().multiFile, vm().getTrajectory());
     stopTimer("W I/O");
+    // save the eigenvalues for later
+    std::string dir = dirname(par().output);
+    int status = mkdir(dir);
+    if (status)
+    {
+        HADRONS_ERROR(Io, "cannot create directory '" + dir
+                      + "' ( " + std::strerror(errno) + ")");
+    }
+    if ( env().getGrid()->IsBoss() ) {
+        
+        std::string eval_filename = A2AVectorsIo::evalFilename(par().output,vm().getTrajectory());
+        A2AVectorsIo::initEvalFile(eval_filename,
+                                   evalM.size());// total size
+        A2AVectorsIo::saveEvalBlock(eval_filename,
+                                    evalM.data(),
+                                    0,// start of chunk
+                                    2*Nl_);// size of chunk saved
+    }
 }
 
 END_MODULE_NAMESPACE
