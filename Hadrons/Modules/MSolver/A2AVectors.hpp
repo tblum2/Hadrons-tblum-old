@@ -853,23 +853,21 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             }
             // write w,v
             fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "/elem" + std::to_string(il) + ".bin";
-            LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
+            //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
             makeFileDir(fullFilename, &sparseGrid);
             binWriter.open(fullFilename);
             binWriter.writeScidacFieldRecord(w[0], record);
             binWriter.close();
-//            if(mu==0){
-//            }
+            if(mu==0){
+                fullFilename =  par().output + "_v" + std::to_string(mu) + "/elem" + std::to_string(il) + ".bin";
+                //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
+                makeFileDir(fullFilename, &sparseGrid);
+                binWriter.open(fullFilename);
+                binWriter.writeScidacFieldRecord(v[0], record);
+                binWriter.close();
+            }
         }
-        // I/O
-        //startTimer("W I/O");
-        //A2AVectorsIo::write(par().output + "_w_mu" + std::to_string(mu), w,                         par().multiFile, vm().getTrajectory());
-        //stopTimer("W I/O");
     }// end mu
-//    startTimer("W I/O");
-//    A2AVectorsIo::write(par().output + "_v", v,par().multiFile, vm().getTrajectory());
-//    stopTimer("W I/O");
-    // save the eigenvalues for later
     std::string dir = dirname(par().output);
     int status = mkdir(dir);
     if (status)
