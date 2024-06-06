@@ -427,8 +427,6 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
         }
         stopTimer("W low mode");
     }
-    LOG(Message) << "W vector 0 = " << w[0] << std::endl;
-    LOG(Message) << "W vector 2*Nl_-1 = " << w[2*Nl_-1] << std::endl;
     
     // High modes
 #if 1
