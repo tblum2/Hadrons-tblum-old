@@ -427,6 +427,8 @@ void TStagA2AVectors<FImpl, Pack>::execute(void)
         }
         stopTimer("W low mode");
     }
+    LOG(Message) << "W vector 0 = " << w[0] << std::endl;
+    LOG(Message) << "W vector 2*Nl_-1 = " << w[2*Nl_-1] << std::endl;
     
     // High modes
 #if 1
@@ -776,9 +778,12 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     Coordinate site;
     Coordinate sparseSite;
     
-    std::random_device rd;  // a seed source for the random number engine
-    std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
+    //std::random_device rd;  // a seed source for the random number engine
+    //std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
     std::uniform_int_distribution<uint32_t> uid(0, nt-1);
+    uint32_t xshift; 
+    uint32_t yshift; 
+    uint32_t zshift; 
     
     //save for later
     std::vector<complex<double>> evalM(2*Nl_);
@@ -804,19 +809,25 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             LOG(Message) << "W vector i = " << il << " (low modes)" << std::endl;
             // don't divide by lambda. Do it in contraction since it is complex
             a2a.makeLowModeW(temp, epack.evec[il/2], eval, il%2);
+            il%2 ? eval=conjugate(eval) : eval ;
+            evalM[il]=eval;
             stopTimer("W low mode");
             // v vec is shifted and * link for conserved current
             temp2 = Umu*Cshift(temp, mu, 1);
-            // w vector, no eval in denom
-            il%2 ? eval=conjugate(eval) : eval ;
-            evalM[il]=eval;
             //temp *= eval;
             
             // Sparsen
             for(int t=0; t<nt;t+=par().tinc){
-                int xshift=uid(gen);
-                int yshift=uid(gen);
-                int zshift=uid(gen);
+                //int xshift=uid(gen);
+                //int yshift=uid(gen);
+                //int zshift=uid(gen);
+                xshift=uid(rngSerial()._generators[0]);
+		CartesianCommunicator::BroadcastWorld(0,(void *)&xshift,sizeof(xshift));
+                yshift=uid(rngSerial()._generators[0]);
+		CartesianCommunicator::BroadcastWorld(0,(void *)&yshift,sizeof(yshift));
+                zshift=uid(rngSerial()._generators[0]);
+		CartesianCommunicator::BroadcastWorld(0,(void *)&zshift,sizeof(zshift));
+//LOG(Message) << "random shifts " << xshift << yshift << zshift << std::endl;
                 for(int z=0; z<ns;z+=par().inc){
                     for(int y=0; y<ns;y+=par().inc){
                         for(int x=0; x<ns;x+=par().inc){
@@ -825,10 +836,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                             site[1]=(y+yshift+ns)%ns;
                             site[2]=(z+zshift+ns)%ns;
                             site[3]=t;
-                            sparseSite[0]=x/par().inc;
-                            sparseSite[1]=y/par().inc;
-                            sparseSite[2]=z/par().inc;
-                            sparseSite[3]=t/par().tinc;
+                            sparseSite[0]=site[0]/par().inc;
+                            sparseSite[1]=site[1]/par().inc;
+                            sparseSite[2]=site[2]/par().inc;
+                            sparseSite[3]=site[3]/par().tinc;
                             if(mu==0){// do v once
                                 peekSite(vec,temp,site);
                                 pokeSite(vec,v[il],sparseSite);
