@@ -220,7 +220,7 @@ void TStagSparseA2AMesonField<FImpl>::execute(void)
     {
         std::stringstream ss;
 
-        ss << "mf000_mu"+std::to_string(mu);
+        ss << "mf000_mu"+std::to_string(par().mu);
 
         return ss.str();
     };
