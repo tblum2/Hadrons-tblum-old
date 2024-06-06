@@ -761,7 +761,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     ScidacWriter binWriter(sparseGrid.IsBoss());
     std::string fullFilename;
     A2AVectorsIo::Record record;
-    const int traj=vm.getTrajectory();
+    const int traj=vm().getTrajectory();
     
     LOG(Message) << "Computing all-to-all vectors using eigenpack " << par().eigenPack << " with " << 2*Nl_ << " low modes " << std::endl;
 
