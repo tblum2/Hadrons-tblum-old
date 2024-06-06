@@ -219,7 +219,7 @@ void TStagSparseA2AMesonField<FImpl>::execute(void)
     {
         std::stringstream ss;
 
-        ss << "_";
+        ss << "mf000";
 
         return ss.str();
     };
