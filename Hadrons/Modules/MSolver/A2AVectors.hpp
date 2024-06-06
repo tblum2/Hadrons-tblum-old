@@ -863,6 +863,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
                 makeFileDir(fullFilename, &sparseGrid);
                 binWriter.open(fullFilename);
+                record.index = il;
                 binWriter.writeScidacFieldRecord(v[0], record);
                 binWriter.close();
             }
