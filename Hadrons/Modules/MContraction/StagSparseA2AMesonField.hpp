@@ -235,8 +235,8 @@ void TStagSparseA2AMesonField<FImpl>::execute(void)
     {
         StagSparseA2AMesonFieldMetadata md;
         
-        md.momstr='0 0 0';
-        md.gamstr = 'n/a';
+        md.momstr= "0 0 0";
+        md.gamstr = "mu" + std::to_string(mu);
         
         return md;
     };
