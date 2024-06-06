@@ -761,6 +761,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     ScidacWriter binWriter(sparseGrid.IsBoss());
     std::string fullFilename;
     A2AVectorsIo::Record record;
+    const int traj=vm.getTrajectory();
     
     LOG(Message) << "Computing all-to-all vectors using eigenpack " << par().eigenPack << " with " << 2*Nl_ << " low modes " << std::endl;
 
@@ -852,14 +853,14 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 }
             }
             // write w,v
-            fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "." + std::to_string(vm.getTrajectory()) + "/elem" + std::to_string(il) + ".bin";
+            fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "." + std::to_string(traj) + "/elem" + std::to_string(il) + ".bin";
             //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
             makeFileDir(fullFilename, &sparseGrid);
             binWriter.open(fullFilename);
             binWriter.writeScidacFieldRecord(w[0], record);
             binWriter.close();
             if(mu==0){
-                fullFilename =  par().output + "_v" + std::to_string(mu) + "." + std::to_string(vm.getTrajectory()) + "/elem" + std::to_string(il) + ".bin";
+                fullFilename =  par().output + "_v" + std::to_string(mu) + "." + std::to_string(traj) + "/elem" + std::to_string(il) + ".bin";
                 //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
                 makeFileDir(fullFilename, &sparseGrid);
                 binWriter.open(fullFilename);
