@@ -756,9 +756,12 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
     Coordinate mpi_layout  = GridDefaultMpi();
     GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
-    std::vector<SparseFermionField> v(2*Nl_,&sparseGrid);
-    std::vector<SparseFermionField> w(2*Nl_,&sparseGrid);
-
+    std::vector<SparseFermionField> v(1,&sparseGrid);
+    std::vector<SparseFermionField> w(1,&sparseGrid);
+    ScidacWriter binWriter(sparseGrid.IsBoss());
+    std::string fullFilename;
+    A2AVectorsIo::Record record;
+    
     LOG(Message) << "Computing all-to-all vectors using eigenpack " << par().eigenPack << " with " << 2*Nl_ << " low modes " << std::endl;
 
     // Staggered Phases. Do spatial gamma only
@@ -820,11 +823,11 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 //int yshift=uid(gen);
                 //int zshift=uid(gen);
                 xshift=uid(rngSerial()._generators[0]);
-		CartesianCommunicator::BroadcastWorld(0,(void *)&xshift,sizeof(xshift));
+                CartesianCommunicator::BroadcastWorld(0,(void *)&xshift,sizeof(xshift));
                 yshift=uid(rngSerial()._generators[0]);
-		CartesianCommunicator::BroadcastWorld(0,(void *)&yshift,sizeof(yshift));
+                CartesianCommunicator::BroadcastWorld(0,(void *)&yshift,sizeof(yshift));
                 zshift=uid(rngSerial()._generators[0]);
-		CartesianCommunicator::BroadcastWorld(0,(void *)&zshift,sizeof(zshift));
+                CartesianCommunicator::BroadcastWorld(0,(void *)&zshift,sizeof(zshift));
 //LOG(Message) << "random shifts " << xshift << yshift << zshift << std::endl;
                 for(int z=0; z<ns;z+=par().inc){
                     for(int y=0; y<ns;y+=par().inc){
@@ -840,23 +843,32 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                             sparseSite[3]=site[3]/par().tinc;
                             if(mu==0){// do v once
                                 peekSite(vec,temp,site);
-                                pokeSite(vec,v[il],sparseSite);
+                                pokeSite(vec,v[0],sparseSite);
                             }
                             peekSite(vec,temp2,site);
-                            pokeSite(vec,w[il],sparseSite);
+                            pokeSite(vec,w[0],sparseSite);
                         }
                     }
                 }
             }
+            // write w,v
+            fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "/elem" + std::to_string(il) + ".bin";
+            LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
+            makeFileDir(fullFilename, &sparseGrid);
+            binWriter.open(fullFilename);
+            binWriter.writeScidacFieldRecord(w[0], record);
+            binWriter.close();
+//            if(mu==0){
+//            }
         }
         // I/O
-        startTimer("W I/O");
-        A2AVectorsIo::write(par().output + "_w_mu" + std::to_string(mu), w,                         par().multiFile, vm().getTrajectory());
-        stopTimer("W I/O");
+        //startTimer("W I/O");
+        //A2AVectorsIo::write(par().output + "_w_mu" + std::to_string(mu), w,                         par().multiFile, vm().getTrajectory());
+        //stopTimer("W I/O");
     }// end mu
-    startTimer("W I/O");
-    A2AVectorsIo::write(par().output + "_v", v,par().multiFile, vm().getTrajectory());
-    stopTimer("W I/O");
+//    startTimer("W I/O");
+//    A2AVectorsIo::write(par().output + "_v", v,par().multiFile, vm().getTrajectory());
+//    stopTimer("W I/O");
     // save the eigenvalues for later
     std::string dir = dirname(par().output);
     int status = mkdir(dir);
