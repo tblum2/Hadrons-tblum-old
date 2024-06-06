@@ -852,14 +852,14 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 }
             }
             // write w,v
-            fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "/elem" + std::to_string(il) + ".bin";
+            fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "." + std::to_string(vm.getTrajectory()) + "/elem" + std::to_string(il) + ".bin";
             //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
             makeFileDir(fullFilename, &sparseGrid);
             binWriter.open(fullFilename);
             binWriter.writeScidacFieldRecord(w[0], record);
             binWriter.close();
             if(mu==0){
-                fullFilename =  par().output + "_v" + std::to_string(mu) + "/elem" + std::to_string(il) + ".bin";
+                fullFilename =  par().output + "_v" + std::to_string(mu) + "." + std::to_string(vm.getTrajectory()) + "/elem" + std::to_string(il) + ".bin";
                 //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
                 makeFileDir(fullFilename, &sparseGrid);
                 binWriter.open(fullFilename);
