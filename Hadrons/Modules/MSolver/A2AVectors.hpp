@@ -790,67 +790,70 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     //save for later
     std::vector<complex<double>> evalM(2*Nl_);
     
-    for (int mu=0;mu<3;mu++){
+    for (unsigned int il = 0; il < 2*Nl_; il++)
+    {
+        // eval of unpreconditioned Dirac op
+        std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
         
-        phases=1.0;
-        if(mu==1){
-            phases = where( mod(x    ,2)==(Integer)0, phases,-phases);
-        } else if(mu==2){
-            phases = where( mod(lin_z,2)==(Integer)0, phases,-phases);
-        }
-        LatticeColourMatrix Umu(U.Grid());
-        Umu = PeekIndex<LorentzIndex>(U,mu);
-        Umu *= phases;
+        startTimer("W low mode");
+        LOG(Message) << "W vector i = " << il << " (low modes)" << std::endl;
+        // don't divide by lambda. Do it in contraction since it is complex
+        a2a.makeLowModeW(temp, epack.evec[il/2], eval, il%2);
+        stopTimer("W low mode");
+        il%2 ? eval=conjugate(eval) : eval ;
+        evalM[il]=eval;
         
-        for (unsigned int il = 0; il < 2*Nl_; il++)
-        {
-            // eval of unpreconditioned Dirac op
-            std::complex<double> eval(mass,sqrt(epack.eval[il/2]-mass*mass));
+        for (int mu=0;mu<3;mu++){
             
-            startTimer("W low mode");
-            LOG(Message) << "W vector i = " << il << " (low modes)" << std::endl;
-            // don't divide by lambda. Do it in contraction since it is complex
-            a2a.makeLowModeW(temp, epack.evec[il/2], eval, il%2);
-            il%2 ? eval=conjugate(eval) : eval ;
-            evalM[il]=eval;
-            stopTimer("W low mode");
+            phases=1.0;
+            if(mu==1){
+                phases = where( mod(x    ,2)==(Integer)0, phases,-phases);
+            } else if(mu==2){
+                phases = where( mod(lin_z,2)==(Integer)0, phases,-phases);
+            }
+            LatticeColourMatrix Umu(U.Grid());
+            Umu = PeekIndex<LorentzIndex>(U,mu);
+            Umu *= phases;
+        
             // v vec is shifted and * link for conserved current
             temp2 = Umu*Cshift(temp, mu, 1);
-            //temp *= eval;
             
             // Sparsen
             for(int t=0; t<nt;t+=par().tinc){
-                //int xshift=uid(gen);
-                //int yshift=uid(gen);
-                //int zshift=uid(gen);
+
                 xshift=uid(rngSerial()._generators[0]);
                 CartesianCommunicator::BroadcastWorld(0,(void *)&xshift,sizeof(xshift));
                 yshift=uid(rngSerial()._generators[0]);
                 CartesianCommunicator::BroadcastWorld(0,(void *)&yshift,sizeof(yshift));
                 zshift=uid(rngSerial()._generators[0]);
                 CartesianCommunicator::BroadcastWorld(0,(void *)&zshift,sizeof(zshift));
-//LOG(Message) << "random shifts " << xshift << yshift << zshift << std::endl;
-                for(int z=0; z<ns;z+=par().inc){
-                    for(int y=0; y<ns;y+=par().inc){
-                        for(int x=0; x<ns;x+=par().inc){
-
+                
+                site[3]=t;
+                sparseSite[3]=site[3]/par().tinc;
+                thread_for(z,ns,{
+                    
+                    site[2]=(z+zshift+ns)%ns;
+                    sparseSite[2]=site[2]/par().inc;
+                    thread_for(y,ns,{
+                        
+                        site[1]=(y+yshift+ns)%ns;
+                        sparseSite[1]=site[1]/par().inc;
+                        thread_for(x,ns,{
+                            
                             site[0]=(x+xshift+ns)%ns;
-                            site[1]=(y+yshift+ns)%ns;
-                            site[2]=(z+zshift+ns)%ns;
-                            site[3]=t;
                             sparseSite[0]=site[0]/par().inc;
-                            sparseSite[1]=site[1]/par().inc;
-                            sparseSite[2]=site[2]/par().inc;
-                            sparseSite[3]=site[3]/par().tinc;
-                            if(mu==0){// do v once
-                                peekSite(vec,temp,site);
-                                pokeSite(vec,v[0],sparseSite);
+
+                            if(x%par().inc==0 && y%par().inc==0 && z%par().inc==0 ){
+                                if(mu==0){// do v once
+                                    peekSite(vec,temp,site);
+                                    pokeSite(vec,v[0],sparseSite);
+                                }
+                                peekSite(vec,temp2,site);
+                                pokeSite(vec,w[0],sparseSite);
                             }
-                            peekSite(vec,temp2,site);
-                            pokeSite(vec,w[0],sparseSite);
-                        }
-                    }
-                }
+                        });
+                    });
+                });
             }
             // write w,v
             fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "." + std::to_string(traj) + "/elem" + std::to_string(il) + ".bin";
