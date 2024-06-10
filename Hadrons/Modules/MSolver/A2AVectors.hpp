@@ -777,9 +777,6 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     FermionField temp2(U.Grid());
     //SparseFermionField temp3(&sparseGrid);
     
-    Coordinate site;
-    Coordinate sparseSite;
-    
     //std::random_device rd;  // a seed source for the random number engine
     //std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
     std::uniform_int_distribution<uint32_t> uid(0, nt-1);
@@ -830,6 +827,9 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             // Sparsen
             //for(int t=0; t<nt;t+=par().tinc){
             thread_for(sdx,ns*ns*ns*nt,{
+                
+                Coordinate site;
+                Coordinate sparseSite;
                     
                 U.Grid()->GlobalIndexToGlobalCoor(sdx,site);
                 int t=site[3];
