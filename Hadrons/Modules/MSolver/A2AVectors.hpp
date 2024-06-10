@@ -834,7 +834,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 sparseSite[3]=site[3]/par().tinc;
                 thread_for(sdx,ns*ns*ns,{
                     
-                    GlobalIndexToGlobalCoor(sdx*t,site);
+                    U.Grid()->GlobalIndexToGlobalCoor(sdx*t,site);
                     site[2]=(site[2]+zshift[t]+ns)%ns;
                     sparseSite[2]=site[2]/par().inc;
                     site[1]=(site[1]+yshift[t]+ns)%ns;
@@ -842,7 +842,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                     site[0]=(site[0]+xshift[t]+ns)%ns;
                     sparseSite[0]=site[0]/par().inc;
 
-                    if(x%par().inc==0 && y%par().inc==0 && z%par().inc==0 ){
+                    if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
                         if(mu==0){// do v once
                             peekSite(vec,temp,site);
                             pokeSite(vec,v[0],sparseSite);
