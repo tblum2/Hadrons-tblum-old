@@ -832,29 +832,24 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 
                 site[3]=t;
                 sparseSite[3]=site[3]/par().tinc;
-                thread_for(z,ns,{
+                thread_for(sdx,ns*ns*ns,{
                     
-                    site[2]=(z+zshift[t]+ns)%ns;
+                    GlobalIndexToGlobalCoor(sdx*t,site);
+                    site[2]=(site[2]+zshift[t]+ns)%ns;
                     sparseSite[2]=site[2]/par().inc;
-                    thread_for(y,ns,{
-                        
-                        site[1]=(y+yshift[t]+ns)%ns;
-                        sparseSite[1]=site[1]/par().inc;
-                        thread_for(x,ns,{
-                            
-                            site[0]=(x+xshift[t]+ns)%ns;
-                            sparseSite[0]=site[0]/par().inc;
+                    site[1]=(site[1]+yshift[t]+ns)%ns;
+                    sparseSite[1]=site[1]/par().inc;
+                    site[0]=(site[0]+xshift[t]+ns)%ns;
+                    sparseSite[0]=site[0]/par().inc;
 
-                            if(x%par().inc==0 && y%par().inc==0 && z%par().inc==0 ){
-                                if(mu==0){// do v once
-                                    peekSite(vec,temp,site);
-                                    pokeSite(vec,v[0],sparseSite);
-                                }
-                                peekSite(vec,temp2,site);
-                                pokeSite(vec,w[0],sparseSite);
-                            }
-                        });
-                    });
+                    if(x%par().inc==0 && y%par().inc==0 && z%par().inc==0 ){
+                        if(mu==0){// do v once
+                            peekSite(vec,temp,site);
+                            pokeSite(vec,v[0],sparseSite);
+                        }
+                        peekSite(vec,temp2,site);
+                        pokeSite(vec,w[0],sparseSite);
+                    }
                 });
             }
             // write w,v
