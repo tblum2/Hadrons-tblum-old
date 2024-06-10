@@ -828,30 +828,28 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             temp2 = Umu*Cshift(temp, mu, 1);
             
             // Sparsen
-            for(int t=0; t<nt;t+=par().tinc){
-                
-                site[3]=t;
-                sparseSite[3]=site[3]/par().tinc;
-                thread_for(sdx,ns*ns*ns,{
+            //for(int t=0; t<nt;t+=par().tinc){
+            thread_for(sdx,ns*ns*ns*nt,{
                     
-                    U.Grid()->GlobalIndexToGlobalCoor(sdx*t,site);
-                    site[2]=(site[2]+zshift[t]+ns)%ns;
-                    sparseSite[2]=site[2]/par().inc;
-                    site[1]=(site[1]+yshift[t]+ns)%ns;
-                    sparseSite[1]=site[1]/par().inc;
-                    site[0]=(site[0]+xshift[t]+ns)%ns;
-                    sparseSite[0]=site[0]/par().inc;
+                U.Grid()->GlobalIndexToGlobalCoor(sdx,site);
+                int t=site[3];
+                sparseSite[3]=t;
+                site[2]=(site[2]+zshift[t]+ns)%ns;
+                sparseSite[2]=site[2]/par().inc;
+                site[1]=(site[1]+yshift[t]+ns)%ns;
+                sparseSite[1]=site[1]/par().inc;
+                site[0]=(site[0]+xshift[t]+ns)%ns;
+                sparseSite[0]=site[0]/par().inc;
 
-                    if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
-                        if(mu==0){// do v once
-                            peekSite(vec,temp,site);
-                            pokeSite(vec,v[0],sparseSite);
-                        }
-                        peekSite(vec,temp2,site);
-                        pokeSite(vec,w[0],sparseSite);
+                if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
+                    if(mu==0){// do v once
+                        peekSite(vec,temp,site);
+                        pokeSite(vec,v[0],sparseSite);
                     }
-                });
-            }
+                    peekSite(vec,temp2,site);
+                    pokeSite(vec,w[0],sparseSite);
+                }
+            });
             // write w,v
             fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "." + std::to_string(traj) + "/elem" + std::to_string(il) + ".bin";
             //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
