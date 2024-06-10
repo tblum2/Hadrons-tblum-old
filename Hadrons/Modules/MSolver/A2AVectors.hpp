@@ -783,9 +783,18 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     //std::random_device rd;  // a seed source for the random number engine
     //std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
     std::uniform_int_distribution<uint32_t> uid(0, nt-1);
-    uint32_t xshift; 
-    uint32_t yshift; 
-    uint32_t zshift; 
+    std::vector<uint32_t> xshift(nt);
+    std::vector<uint32_t> yshift(nt);
+    std::vector<uint32_t> zshift(nt);
+    
+    for(int t=0;t<nt;t++){
+        xshift[t]=uid(rngSerial()._generators[0]);
+        yshift[t]=uid(rngSerial()._generators[0]);
+        zshift[t]=uid(rngSerial()._generators[0]);
+    }
+    CartesianCommunicator::BroadcastWorld(0,(void *)&xshift[0],sizeof(uint32_t)*xshift.size());
+    CartesianCommunicator::BroadcastWorld(0,(void *)&yshift[0],sizeof(uint32_t)*yshift.size());
+    CartesianCommunicator::BroadcastWorld(0,(void *)&zshift[0],sizeof(uint32_t)*zshift.size());
     
     //save for later
     std::vector<complex<double>> evalM(2*Nl_);
@@ -820,27 +829,20 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             
             // Sparsen
             for(int t=0; t<nt;t+=par().tinc){
-
-                xshift=uid(rngSerial()._generators[0]);
-                CartesianCommunicator::BroadcastWorld(0,(void *)&xshift,sizeof(xshift));
-                yshift=uid(rngSerial()._generators[0]);
-                CartesianCommunicator::BroadcastWorld(0,(void *)&yshift,sizeof(yshift));
-                zshift=uid(rngSerial()._generators[0]);
-                CartesianCommunicator::BroadcastWorld(0,(void *)&zshift,sizeof(zshift));
                 
                 site[3]=t;
                 sparseSite[3]=site[3]/par().tinc;
                 thread_for(z,ns,{
                     
-                    site[2]=(z+zshift+ns)%ns;
+                    site[2]=(z+zshift[t]+ns)%ns;
                     sparseSite[2]=site[2]/par().inc;
                     thread_for(y,ns,{
                         
-                        site[1]=(y+yshift+ns)%ns;
+                        site[1]=(y+yshift[t]+ns)%ns;
                         sparseSite[1]=site[1]/par().inc;
                         thread_for(x,ns,{
                             
-                            site[0]=(x+xshift+ns)%ns;
+                            site[0]=(x+xshift[t]+ns)%ns;
                             sparseSite[0]=site[0]/par().inc;
 
                             if(x%par().inc==0 && y%par().inc==0 && z%par().inc==0 ){
