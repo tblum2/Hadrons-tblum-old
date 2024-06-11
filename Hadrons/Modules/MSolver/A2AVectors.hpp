@@ -745,7 +745,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     double  mass    = par().mass;
     uint64_t     nt      = env().getDim(Tp);
     uint64_t     ns      = env().getDim(Xp);
-    uint64_t     glbsize = ns**3 * nt;
+    uint64_t     glbsize = ns*ns*ns * nt;
     envGetTmp(A2A, a2a);
     
     // Sparse Grid
