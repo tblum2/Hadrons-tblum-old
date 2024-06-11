@@ -743,8 +743,9 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     auto    &solver = envGet(Solver, par().solver);
     auto    &epack  = envGet(Pack, par().eigenPack);
     double  mass    = par().mass;
-    int     nt      = env().getDim(Tp);
-    int     ns      = env().getDim(Xp);
+    uint64_t     nt      = env().getDim(Tp);
+    uint64_t     ns      = env().getDim(Xp);
+    uint64_t     glbsize = ns**3 * nt;
     envGetTmp(A2A, a2a);
     
     // Sparse Grid
@@ -826,7 +827,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             
             // Sparsen
             //for(int t=0; t<nt;t+=par().tinc){
-            thread_for(sdx,ns*ns*ns*nt,{
+            thread_for(sdx,glbsize,{
                 
                 Coordinate site;
                 Coordinate sparseSite;
