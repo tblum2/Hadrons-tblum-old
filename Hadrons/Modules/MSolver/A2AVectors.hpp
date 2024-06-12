@@ -748,6 +748,8 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     uint64_t     glbsize = ns*ns*ns * nt;
     envGetTmp(A2A, a2a);
     
+    //int orthogdim=3; // time dir
+    
     // Sparse Grid
     Coordinate sparseLatSize = envGetGrid(FermionField)->FullDimensions();
     sparseLatSize[0] /= par().inc;
@@ -806,6 +808,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
         LOG(Message) << "W vector i = " << il << " (low modes)" << std::endl;
         // don't divide by lambda. Do it in contraction since it is complex
         a2a.makeLowModeW(temp, epack.evec[il/2], eval, il%2);
+//        autoView(w_v,w[0],CpuWrite);
+//        autoView(v_v,v[0],CpuWrite);
+//        autoView(temp_v,temp,CpuRead);
+        
         stopTimer("W low mode");
         il%2 ? eval=conjugate(eval) : eval ;
         evalM[il]=eval;
@@ -824,14 +830,15 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
         
             // v vec is shifted and * link for conserved current
             temp2 = Umu*Cshift(temp, mu, 1);
+            //autoView(temp2_v,temp2,CpuRead);
             
             // Sparsen
             //for(int t=0; t<nt;t+=par().tinc){
             thread_for(sdx,glbsize,{
-                
+
                 Coordinate site;
                 Coordinate sparseSite;
-                    
+
                 U.Grid()->GlobalIndexToGlobalCoor(sdx,site);
                 int t=site[3];
                 sparseSite[3]=t;
@@ -844,13 +851,35 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
 
                 if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
                     if(mu==0){// do v once
-                        peekSite(vec,temp,site);
-                        pokeSite(vec,v[0],sparseSite);
+                        peekLocalSite(vec,temp,site);
+                        pokeLocalSite(vec,v[0],sparseSite);
                     }
-                    peekSite(vec,temp2,site);
-                    pokeSite(vec,w[0],sparseSite);
+                    peekLocalSite(vec,temp2,site);
+                    pokeLocalSite(vec,w[0],sparseSite);
                 }
             });
+//
+//==============================================================
+//            int rd=U.Grid->_rdimensions[orthogdim];
+//            int e2=U.Grid->_slice_block [orthogdim];
+//            // loop over reduced time slice
+//            thread_for(rt, rd,{
+//
+//                // base offset for start of plane
+//                int so=rt*U.Grid()->_ostride[orthogdim];
+//                // loop over osites on timeslice
+//                // index on time slice: idx = x+nx*(y+ny*z)
+//                // shift: x+xs+nx*(y+ys+ny*(z+zs))
+//                // = idx+xs+nx*ys+nx*ny*zs
+//                // = idx+ishift
+//                for(int b=0;b<e2;b+=par().inc){
+//                    int bb=b%rvol;
+//                    int ss= so+bb;
+//                    int tt= so+bb/2;
+//                    w_v[tt]=temp2_v[ss];
+//                }
+//             });
+//================================================================
             // write w,v
             fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "." + std::to_string(traj) + "/elem" + std::to_string(il) + ".bin";
             //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
