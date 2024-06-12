@@ -748,7 +748,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     uint64_t     glbsize = ns*ns*ns * nt;
     envGetTmp(A2A, a2a);
     
-    //int orthogdim=3; // time dir
+    int orthogdim=3; // time dir
     
     // Sparse Grid
     Coordinate sparseLatSize = envGetGrid(FermionField)->FullDimensions();
@@ -798,6 +798,9 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     //save for later
     std::vector<complex<double>> evalM(2*Nl_);
+    uint64_t localsize;
+    for(int d=0;d<Nd;d++)
+        localsize=localsize*U.Grid()->_ldimensions[d];
     
     for (unsigned int il = 0; il < 2*Nl_; il++)
     {
@@ -834,12 +837,12 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             
             // Sparsen
             //for(int t=0; t<nt;t+=par().tinc){
-            thread_for(sdx,glbsize,{
+            thread_for(sdx,localsize,{
 
                 Coordinate site;
                 Coordinate sparseSite;
 
-                U.Grid()->GlobalIndexToGlobalCoor(sdx,site);
+                U.Grid()->LocalIndexToLocalCoor(sdx,site);
                 int t=site[3];
                 sparseSite[3]=t;
                 site[2]=(site[2]+zshift[t]+ns)%ns;
