@@ -799,6 +799,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     //save for later
     std::vector<complex<double>> evalM(2*Nl_);
     uint64_t localsize;
+    localsize = 1;
     for(int d=0;d<Nd;d++)
         localsize=localsize*U.Grid()->_ldimensions[d];
     
@@ -844,12 +845,13 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
 
                 U.Grid()->LocalIndexToLocalCoor(sdx,site);
                 int t=site[3];
+                int tglb=t+U.Grid()->_lstart[orthogdim];
                 sparseSite[3]=t;
-                site[2]=(site[2]+zshift[t]+ns)%ns;
+                site[2]=(site[2]+zshift[tglb]+ns)%ns;
                 sparseSite[2]=site[2]/par().inc;
-                site[1]=(site[1]+yshift[t]+ns)%ns;
+                site[1]=(site[1]+yshift[tglb]+ns)%ns;
                 sparseSite[1]=site[1]/par().inc;
-                site[0]=(site[0]+xshift[t]+ns)%ns;
+                site[0]=(site[0]+xshift[tglb]+ns)%ns;
                 sparseSite[0]=site[0]/par().inc;
 
                 if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
