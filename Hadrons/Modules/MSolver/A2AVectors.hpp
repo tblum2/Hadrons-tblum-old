@@ -714,7 +714,7 @@ std::vector<std::string> TStagSparseA2AVectors<FImpl, Pack>::getInput(void)
 template <typename FImpl, typename Pack>
 std::vector<std::string> TStagSparseA2AVectors<FImpl, Pack>::getOutput(void)
 {
-    std::vector<std::string> out = {"sparse_v", "sparse_w0", "sparse_w1", "sparse_w2"};
+    std::vector<std::string> out = {getName() +"_v", getName() +"_w0", getName() +"_w1", getName() +"_w2"};
 
     return out;
 }
@@ -728,6 +728,23 @@ void TStagSparseA2AVectors<FImpl, Pack>::setup(void)
     
     auto &epack = envGet(Pack, par().eigenPack);
     Nl_ = epack.evec.size();
+    // Sparse Grid
+    Coordinate sparseLatSize = envGetGrid(FermionField)->FullDimensions();
+    sparseLatSize[0] /= par().inc;
+    sparseLatSize[1] /= par().inc;
+    sparseLatSize[2] /= par().inc;
+    sparseLatSize[3] /= par().tinc;
+    Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
+    Coordinate mpi_layout  = GridDefaultMpi();
+    GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
+    envCreate(std::vector<SparseFermionField>, getName() + "_v", 1,
+              2*Nl_, &sparseGrid);
+    envCreate(std::vector<SparseFermionField>, getName() + "_w0", 1,
+              2*Nl_, &sparseGrid);
+    envCreate(std::vector<SparseFermionField>, getName() + "_w1", 1,
+              2*Nl_, &sparseGrid);
+    envCreate(std::vector<SparseFermionField>, getName() + "_w2", 1,
+              2*Nl_, &sparseGrid);
     envTmp(A2A, "a2a", 1, action, solver);
 }
 
@@ -747,20 +764,15 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     int orthogdim=3; // time dir
     
-    // Sparse Grid
-    Coordinate sparseLatSize = envGetGrid(FermionField)->FullDimensions();
-    sparseLatSize[0] /= par().inc;
-    sparseLatSize[1] /= par().inc;
-    sparseLatSize[2] /= par().inc;
-    sparseLatSize[3] /= par().tinc;
-    Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
-    Coordinate mpi_layout  = GridDefaultMpi();
-    GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
-    std::vector<SparseFermionField> sparse_v(2*Nl_,&sparseGrid);
-    std::vector<SparseFermionField> sparse_w0(2*Nl_,&sparseGrid);
-    std::vector<SparseFermionField> sparse_w1(2*Nl_,&sparseGrid);
-    std::vector<SparseFermionField> sparse_w2(2*Nl_,&sparseGrid);
-    ScidacWriter binWriter(sparseGrid.IsBoss());
+//    std::vector<SparseFermionField> sparse_v(2*Nl_,&sparseGrid);
+//    std::vector<SparseFermionField> sparse_w0(2*Nl_,&sparseGrid);
+//    std::vector<SparseFermionField> sparse_w1(2*Nl_,&sparseGrid);
+//    std::vector<SparseFermionField> sparse_w2(2*Nl_,&sparseGrid);
+    auto &v = envGet(std::vector<SparseFermionField>, getName() + "_v");
+    auto &w0 = envGet(std::vector<SparseFermionField>, getName() + "_w0");
+    auto &w1 = envGet(std::vector<SparseFermionField>, getName() + "_w1");
+    auto &w2 = envGet(std::vector<SparseFermionField>, getName() + "_w2");
+    ScidacWriter binWriter(U.Grid()->IsBoss());
     std::string fullFilename;
     A2AVectorsIo::Record record;
     const int traj=vm().getTrajectory();
@@ -855,15 +867,15 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
                     if(mu==0){// do v once
                         peekLocalSite(vec,temp,site);
-                        pokeLocalSite(vec,sparse_v[il],sparseSite);
+                        pokeLocalSite(vec,v[il],sparseSite);
                         peekLocalSite(vec,temp2,site);
-                        pokeLocalSite(vec,sparse_w0[il],sparseSite);
+                        pokeLocalSite(vec,w0[il],sparseSite);
                     }else if(mu==1){
                         peekLocalSite(vec,temp2,site);
-                        pokeLocalSite(vec,sparse_w1[il],sparseSite);
+                        pokeLocalSite(vec,w1[il],sparseSite);
                     }else if(mu==2){
                         peekLocalSite(vec,temp2,site);
-                        pokeLocalSite(vec,sparse_w2[il],sparseSite);
+                        pokeLocalSite(vec,w2[il],sparseSite);
                     }
                 }
             });
@@ -880,12 +892,12 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     if (!par().output.empty())
     {
         startTimer("V I/O");
-        A2AVectorsIo::write(par().output + "_v", sparse_v, par().multiFile, vm().getTrajectory());
+        A2AVectorsIo::write(par().output + "_v", v, par().multiFile, vm().getTrajectory());
         stopTimer("V I/O");
         startTimer("W I/O");
-        A2AVectorsIo::write(par().output + "_w0", sparse_w0, par().multiFile, vm().getTrajectory());
-        A2AVectorsIo::write(par().output + "_w1", sparse_w1, par().multiFile, vm().getTrajectory());
-        A2AVectorsIo::write(par().output + "_w2", sparse_w2, par().multiFile, vm().getTrajectory());
+        A2AVectorsIo::write(par().output + "_w0", w0, par().multiFile, vm().getTrajectory());
+        A2AVectorsIo::write(par().output + "_w1", w1, par().multiFile, vm().getTrajectory());
+        A2AVectorsIo::write(par().output + "_w2", w2, par().multiFile, vm().getTrajectory());
         stopTimer("W I/O");
     }
     
