@@ -714,7 +714,8 @@ std::vector<std::string> TStagSparseA2AVectors<FImpl, Pack>::getInput(void)
 template <typename FImpl, typename Pack>
 std::vector<std::string> TStagSparseA2AVectors<FImpl, Pack>::getOutput(void)
 {
-    std::vector<std::string> out = {getName() + "sparse_w"};
+    std::vector<std::string> out = {"sparse_v", "sparse_w0", "sparse_w1", "sparse_w2"};
+
     return out;
 }
 
@@ -727,10 +728,6 @@ void TStagSparseA2AVectors<FImpl, Pack>::setup(void)
     
     auto &epack = envGet(Pack, par().eigenPack);
     Nl_ = epack.evec.size();
-    // V, W vecs. 2x Nl_ for +-lambda
-    // sparse vectors need sparse grid
-    //envCreate(std::vector<SparseFermionField>, "v", 1, 2*Nl_, &sparseGrid);
-    //envCreate(std::vector<SparseFermionField>, "w", 1, 2*Nl_, &sparseGrid);
     envTmp(A2A, "a2a", 1, action, solver);
 }
 
@@ -759,8 +756,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
     Coordinate mpi_layout  = GridDefaultMpi();
     GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
-    std::vector<SparseFermionField> v(1,&sparseGrid);
-    std::vector<SparseFermionField> w(1,&sparseGrid);
+    std::vector<SparseFermionField> sparse_v(2*Nl_,&sparseGrid);
+    std::vector<SparseFermionField> sparse_w0(2*Nl_,&sparseGrid);
+    std::vector<SparseFermionField> sparse_w1(2*Nl_,&sparseGrid);
+    std::vector<SparseFermionField> sparse_w2(2*Nl_,&sparseGrid);
     ScidacWriter binWriter(sparseGrid.IsBoss());
     std::string fullFilename;
     A2AVectorsIo::Record record;
@@ -834,7 +833,6 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
         
             // v vec is shifted and * link for conserved current
             temp2 = Umu*Cshift(temp, mu, 1);
-            //autoView(temp2_v,temp2,CpuRead);
             
             // Sparsen
             //for(int t=0; t<nt;t+=par().tinc){
@@ -857,53 +855,20 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
                     if(mu==0){// do v once
                         peekLocalSite(vec,temp,site);
-                        pokeLocalSite(vec,v[0],sparseSite);
+                        pokeLocalSite(vec,sparse_v[il],sparseSite);
+                        peekLocalSite(vec,temp2,site);
+                        pokeLocalSite(vec,sparse_w0[il],sparseSite);
+                    }else if(mu==1){
+                        peekLocalSite(vec,temp2,site);
+                        pokeLocalSite(vec,sparse_w1[il],sparseSite);
+                    }else if(mu==2){
+                        peekLocalSite(vec,temp2,site);
+                        pokeLocalSite(vec,sparse_w2[il],sparseSite);
                     }
-                    peekLocalSite(vec,temp2,site);
-                    pokeLocalSite(vec,w[0],sparseSite);
                 }
             });
-//
-//==============================================================
-//            int rd=U.Grid->_rdimensions[orthogdim];
-//            int e2=U.Grid->_slice_block [orthogdim];
-//            // loop over reduced time slice
-//            thread_for(rt, rd,{
-//
-//                // base offset for start of plane
-//                int so=rt*U.Grid()->_ostride[orthogdim];
-//                // loop over osites on timeslice
-//                // index on time slice: idx = x+nx*(y+ny*z)
-//                // shift: x+xs+nx*(y+ys+ny*(z+zs))
-//                // = idx+xs+nx*ys+nx*ny*zs
-//                // = idx+ishift
-//                for(int b=0;b<e2;b+=par().inc){
-//                    int bb=b%rvol;
-//                    int ss= so+bb;
-//                    int tt= so+bb/2;
-//                    w_v[tt]=temp2_v[ss];
-//                }
-//             });
-//================================================================
-            // write w,v
-            fullFilename =  par().output + "_w_mu" + std::to_string(mu) + "." + std::to_string(traj) + "/elem" + std::to_string(il) + ".bin";
-            //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
-            makeFileDir(fullFilename, &sparseGrid);
-            binWriter.open(fullFilename);
-            record.index = il;
-            binWriter.writeScidacFieldRecord(w[0], record);
-            binWriter.close();
-            if(mu==0){
-                fullFilename =  par().output + "_v" + "." + std::to_string(traj) + "/elem" + std::to_string(il) + ".bin";
-                //LOG(Message) << "Writing w_mu" << mu << " vector " << il << std::endl;
-                makeFileDir(fullFilename, &sparseGrid);
-                binWriter.open(fullFilename);
-                record.index = il;
-                binWriter.writeScidacFieldRecord(v[0], record);
-                binWriter.close();
-            }
-        }
-    }// end mu
+        }// end mu
+    }// end evecs
     std::string dir = dirname(par().output);
     int status = mkdir(dir);
     if (status)
@@ -911,6 +876,19 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
         HADRONS_ERROR(Io, "cannot create directory '" + dir
                       + "' ( " + std::strerror(errno) + ")");
     }
+    
+    if (!par().output.empty())
+    {
+        startTimer("V I/O");
+        A2AVectorsIo::write(par().output + "_v", sparse_v, par().multiFile, vm().getTrajectory());
+        stopTimer("V I/O");
+        startTimer("W I/O");
+        A2AVectorsIo::write(par().output + "_w0", sparse_w0, par().multiFile, vm().getTrajectory());
+        A2AVectorsIo::write(par().output + "_w1", sparse_w1, par().multiFile, vm().getTrajectory());
+        A2AVectorsIo::write(par().output + "_w2", sparse_w2, par().multiFile, vm().getTrajectory());
+        stopTimer("W I/O");
+    }
+    
     if ( env().getGrid()->IsBoss() ) {
         
         std::string eval_filename = A2AVectorsIo::evalFilename(par().output,vm().getTrajectory());
