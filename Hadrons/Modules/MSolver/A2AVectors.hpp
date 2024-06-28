@@ -728,23 +728,6 @@ void TStagSparseA2AVectors<FImpl, Pack>::setup(void)
     
     auto &epack = envGet(Pack, par().eigenPack);
     Nl_ = epack.evec.size();
-    // Sparse Grid
-    Coordinate sparseLatSize = envGetGrid(FermionField)->FullDimensions();
-    sparseLatSize[0] /= par().inc;
-    sparseLatSize[1] /= par().inc;
-    sparseLatSize[2] /= par().inc;
-    sparseLatSize[3] /= par().tinc;
-    Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
-    Coordinate mpi_layout  = GridDefaultMpi();
-    GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
-    envCreate(std::vector<SparseFermionField>, getName() + "_v", 1,
-              2*Nl_, &sparseGrid);
-    envCreate(std::vector<SparseFermionField>, getName() + "_w0", 1,
-              2*Nl_, &sparseGrid);
-    envCreate(std::vector<SparseFermionField>, getName() + "_w1", 1,
-              2*Nl_, &sparseGrid);
-    envCreate(std::vector<SparseFermionField>, getName() + "_w2", 1,
-              2*Nl_, &sparseGrid);
     envTmp(A2A, "a2a", 1, action, solver);
 }
 
@@ -768,6 +751,23 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
 //    std::vector<SparseFermionField> sparse_w0(2*Nl_,&sparseGrid);
 //    std::vector<SparseFermionField> sparse_w1(2*Nl_,&sparseGrid);
 //    std::vector<SparseFermionField> sparse_w2(2*Nl_,&sparseGrid);
+    // Sparse Grid
+    Coordinate sparseLatSize = envGetGrid(FermionField)->FullDimensions();
+    sparseLatSize[0] /= par().inc;
+    sparseLatSize[1] /= par().inc;
+    sparseLatSize[2] /= par().inc;
+    sparseLatSize[3] /= par().tinc;
+    Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
+    Coordinate mpi_layout  = GridDefaultMpi();
+    GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
+    envCreate(std::vector<SparseFermionField>, getName() + "_v", 1,
+              2*Nl_, &sparseGrid);
+    envCreate(std::vector<SparseFermionField>, getName() + "_w0", 1,
+              2*Nl_, &sparseGrid);
+    envCreate(std::vector<SparseFermionField>, getName() + "_w1", 1,
+              2*Nl_, &sparseGrid);
+    envCreate(std::vector<SparseFermionField>, getName() + "_w2", 1,
+              2*Nl_, &sparseGrid);
     auto &v = envGet(std::vector<SparseFermionField>, getName() + "_v");
     auto &w0 = envGet(std::vector<SparseFermionField>, getName() + "_w0");
     auto &w1 = envGet(std::vector<SparseFermionField>, getName() + "_w1");
