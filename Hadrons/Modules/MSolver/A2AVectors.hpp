@@ -742,13 +742,17 @@ void TStagSparseA2AVectors<FImpl, Pack>::setup(void)
     //Coordinate mpi_layout  = GridDefaultMpi();
     //GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
     envCreate(std::vector<CoarseField>, getName() + "_v", 1,
-              2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
+              2*Nl_, envGetGrid(FermionField));
+              //2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
     envCreate(std::vector<CoarseField>, getName() + "_w0", 1,
-              2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
+              2*Nl_, envGetGrid(FermionField));
+              //2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
     envCreate(std::vector<CoarseField>, getName() + "_w1", 1,
-              2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
+              2*Nl_, envGetGrid(FermionField));
+              //2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
     envCreate(std::vector<CoarseField>, getName() + "_w2", 1,
-              2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
+              2*Nl_, envGetGrid(FermionField));
+              //2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
     
 }
 
