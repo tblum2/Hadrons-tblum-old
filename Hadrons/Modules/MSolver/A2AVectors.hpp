@@ -734,10 +734,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::setup(void)
     
     // Sparse Grid
     std::vector<int> sparseLat(4);
-    sparseLat[0] /= par().inc;
-    sparseLat[1] /= par().inc;
-    sparseLat[2] /= par().inc;
-    sparseLat[3] /= par().tinc;
+    sparseLat[0] = env().getDim(Xp)/par().inc;
+    sparseLat[1] = env().getDim(Yp)/par().inc;
+    sparseLat[2] = env().getDim(Zp)/par().inc;
+    sparseLat[3] = env().getDim(Tp)/par().tinc;
     //Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
     //Coordinate mpi_layout  = GridDefaultMpi();
     //GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
