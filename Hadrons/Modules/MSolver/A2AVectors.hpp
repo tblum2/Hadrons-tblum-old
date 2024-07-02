@@ -667,7 +667,7 @@ public:
     FERM_TYPE_ALIASES(FImpl,);
     SOLVER_TYPE_ALIASES(FImpl,);
     typedef A2AVectorsSchurStaggered<FImpl> A2A;
-    typedef typename Grid::NaiveStaggeredFermionR::FermionField CoarseField;
+    typedef typename Grid::NaiveStaggeredFermionR::FermionField SparseFermionField;
     //typedef typename CoarseField CoarseField;
 
 public:
@@ -733,27 +733,19 @@ void TStagSparseA2AVectors<FImpl, Pack>::setup(void)
     envTmp(A2A, "a2a", 1, action, solver);
     
     // Sparse Grid
-    std::vector<int> sparseLat(4);
-    sparseLat[0] = env().getDim(Xp)/par().inc;
-    sparseLat[1] = env().getDim(Yp)/par().inc;
-    sparseLat[2] = env().getDim(Zp)/par().inc;
-    sparseLat[3] = env().getDim(Tp)/par().tinc;
-    //Coordinate simd_layout = GridDefaultSimd(Nd,vComplex::Nsimd());
-    //Coordinate mpi_layout  = GridDefaultMpi();
-    //GridCartesian sparseGrid(sparseLatSize,simd_layout,mpi_layout);
-    envCreate(std::vector<CoarseField>, getName() + "_v", 1,
-              2*Nl_, envGetGrid(FermionField));
-              //2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
-    envCreate(std::vector<CoarseField>, getName() + "_w0", 1,
-              2*Nl_, envGetGrid(FermionField));
-              //2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
-    envCreate(std::vector<CoarseField>, getName() + "_w1", 1,
-              2*Nl_, envGetGrid(FermionField));
-              //2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
-    envCreate(std::vector<CoarseField>, getName() + "_w2", 1,
-              2*Nl_, envGetGrid(FermionField));
-              //2*Nl_, envGetCoarseGrid(CoarseField,sparseLat,1));
-    
+    std::vector<int> blocksize(4);
+    blocksize[0] = par().inc;
+    blocksize[1] = par().inc;
+    blocksize[2] = par().inc;
+    blocksize[3] = par().tinc;
+    envCreate(std::vector<SparseFermionField>, getName() + "_v", 1,
+              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize,1));
+    envCreate(std::vector<SparseFermionField>, getName() + "_w0", 1,
+              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize,1));
+    envCreate(std::vector<SparseFermionField>, getName() + "_w1", 1,
+              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize,1));
+    envCreate(std::vector<SparseFermionField>, getName() + "_w2", 1,
+              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize,1));
 }
 
 // execution ///////////////////////////////////////////////////////////////////
@@ -772,10 +764,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     int orthogdim=3; // time dir
         
-    auto &v = envGet(std::vector<CoarseField>, getName() + "_v");
-    auto &w0 = envGet(std::vector<CoarseField>, getName() + "_w0");
-    auto &w1 = envGet(std::vector<CoarseField>, getName() + "_w1");
-    auto &w2 = envGet(std::vector<CoarseField>, getName() + "_w2");
+    auto &v = envGet(std::vector<SparseFermionField>, getName() + "_v");
+    auto &w0 = envGet(std::vector<SparseFermionField>, getName() + "_w0");
+    auto &w1 = envGet(std::vector<SparseFermionField>, getName() + "_w1");
+    auto &w2 = envGet(std::vector<SparseFermionField>, getName() + "_w2");
     ScidacWriter binWriter(U.Grid()->IsBoss());
     std::string fullFilename;
     A2AVectorsIo::Record record;
