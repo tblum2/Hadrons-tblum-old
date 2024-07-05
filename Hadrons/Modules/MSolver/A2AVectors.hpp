@@ -896,7 +896,12 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     if ( env().getGrid()->IsBoss() ) {
         
-        std::string eval_filename = A2AVectorsIo::evalFilename(par().output,vm().getTrajectory());
+        std::string eval_filename;
+        if (!par().output.empty()){
+            eval_filename=A2AVectorsIo::evalFilename(par().output,vm().getTrajectory());
+        }else{
+            eval_filename=A2AVectorsIo::evalFilename("evals",vm().getTrajectory());
+        }
         A2AVectorsIo::initEvalFile(eval_filename,
                                    evalM.size());// total size
         A2AVectorsIo::saveEvalBlock(eval_filename,
