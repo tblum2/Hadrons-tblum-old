@@ -874,16 +874,16 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             });
         }// end mu
     }// end evecs
-    std::string dir = dirname(par().output);
-    int status = mkdir(dir);
-    if (status)
-    {
-        HADRONS_ERROR(Io, "cannot create directory '" + dir
-                      + "' ( " + std::strerror(errno) + ")");
-    }
     
+    std::string dir = dirname(par().output);
     if (!par().output.empty())
     {
+        int status = mkdir(dir);
+        if (status)
+        {
+            HADRONS_ERROR(Io, "cannot create directory '" + dir
+                          + "' ( " + std::strerror(errno) + ")");
+        }
         startTimer("V I/O");
         A2AVectorsIo::write(par().output + "_v", v, par().multiFile, vm().getTrajectory());
         stopTimer("V I/O");
