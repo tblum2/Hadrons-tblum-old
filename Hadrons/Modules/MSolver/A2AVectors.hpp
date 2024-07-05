@@ -739,13 +739,13 @@ void TStagSparseA2AVectors<FImpl, Pack>::setup(void)
     blocksize[2] = par().inc;
     blocksize[3] = par().tinc;
     envCreate(std::vector<SparseFermionField>, getName() + "_v", 1,
-              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize,1));
+              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize));
     envCreate(std::vector<SparseFermionField>, getName() + "_w0", 1,
-              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize,1));
+              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize));
     envCreate(std::vector<SparseFermionField>, getName() + "_w1", 1,
-              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize,1));
+              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize));
     envCreate(std::vector<SparseFermionField>, getName() + "_w2", 1,
-              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize,1));
+              2*Nl_, envGetCoarseGrid(SparseFermionField,blocksize));
 }
 
 // execution ///////////////////////////////////////////////////////////////////
@@ -762,7 +762,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     uint64_t     glbsize = ns*ns*ns * nt;
     envGetTmp(A2A, a2a);
     
-    int orthogdim=3; // time dir
+    int orthogdim=env().getNd()-1; // time dir
         
     auto &v = envGet(std::vector<SparseFermionField>, getName() + "_v");
     auto &w0 = envGet(std::vector<SparseFermionField>, getName() + "_w0");
@@ -819,9 +819,6 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
         LOG(Message) << "W vector i = " << il << " (low modes)" << std::endl;
         // don't divide by lambda. Do it in contraction since it is complex
         a2a.makeLowModeW(temp, epack.evec[il/2], eval, il%2);
-//        autoView(w_v,w[0],CpuWrite);
-//        autoView(v_v,v[0],CpuWrite);
-//        autoView(temp_v,temp,CpuRead);
         
         stopTimer("W low mode");
         il%2 ? eval=conjugate(eval) : eval ;

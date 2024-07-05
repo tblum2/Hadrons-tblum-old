@@ -26,10 +26,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 See the full license in the file "LICENSE" in the top level distribution directory
 *************************************************************************************/
 /*  END LEGAL */
-#include <Hadrons/Modules/MContraction/StagA2AMesonField.hpp>
+#include <Hadrons/Modules/MContraction/StagSparseA2AMesonField.hpp>
 
 using namespace Grid;
 using namespace Hadrons;
 using namespace MContraction;
 
-template class Grid::Hadrons::MContraction::TStagA2AMesonField<STAGIMPL>;
+template class Grid::Hadrons::MContraction::TStagSparseA2AMesonField<STAGIMPL>;
