@@ -143,7 +143,6 @@ public:
                                       StagSparseA2AMesonFieldMetadata,
                                       HADRONS_A2AM_IO_TYPE> Computation;
     typedef StagSparseMesonFieldKernel<Complex, FImpl> Kernel;
-    typedef typename Grid::NaiveStaggeredFermionR::FermionField SparseFermionField;
 public:
     // constructor
     TStagSparseA2AMesonField(const std::string name);
@@ -242,7 +241,7 @@ void TStagSparseA2AMesonField<FImpl>::execute(void)
         return md;
     };
 
-    Kernel      kernel(envGetCoarseGrid(SparseFermionField));
+    Kernel      kernel(envGetGrid(FermionField));
 
     envGetTmp(Computation, computation);
     computation.execute(left, right, kernel, ionameFn, filenameFn, metadataFn);
