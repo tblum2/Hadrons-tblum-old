@@ -789,7 +789,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     //std::random_device rd;  // a seed source for the random number engine
     //std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-    std::uniform_int_distribution<uint32_t> uid(0, nt-1);
+    std::uniform_int_distribution<uint32_t> uid(0, ns-1);
     std::vector<uint32_t> xshift(nt);
     std::vector<uint32_t> yshift(nt);
     std::vector<uint32_t> zshift(nt);
