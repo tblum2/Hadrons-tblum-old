@@ -805,6 +805,11 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     //save for later
     std::vector<complex<double>> evalM(2*Nl_);
+    // global to local coord shifts
+    std::vector<int> loc2glbshift(4);
+    for(int d=0;d<Nd;d++)
+        loc2glbshift[d]=U.Grid()->_lstart[d];
+    
     uint64_t localsize;
     localsize = 1;
     for(int d=0;d<Nd;d++)
@@ -843,20 +848,20 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             //for(int t=0; t<nt;t+=par().tinc){
             thread_for(sdx,localsize,{
 
+                // local sites on node
                 Coordinate site;
                 Coordinate sparseSite;
 
                 U.Grid()->LocalIndexToLocalCoor(sdx,site);
                 int t=site[3];
-                int tglb=t+U.Grid()->_lstart[orthogdim];
+                int tglb=t+loc2glbshift[3];
                 sparseSite[3]=t;
-                site[2]=(site[2]+zshift[tglb]+ns)%ns;
-                sparseSite[2]=site[2]/par().inc;
-                site[1]=(site[1]+yshift[tglb]+ns)%ns;
-                sparseSite[1]=site[1]/par().inc;
-                site[0]=(site[0]+xshift[tglb]+ns)%ns;
-                sparseSite[0]=site[0]/par().inc;
-
+                //local site = glb site(shifted)-glb2locashift
+                for(int i=0;i<3;i++){
+                    site[i]=(site[i]+loc2glbshift[i]+zshift[tglb]+ns)%ns;
+                    site[i]-=loc2glbshift[i];
+                    sparseSite[2]=site[i]/par().inc;
+                }
                 if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
                     if(mu==0){// do v once
                         peekLocalSite(vec,temp,site);
