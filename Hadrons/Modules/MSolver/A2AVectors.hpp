@@ -852,16 +852,19 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 Coordinate site;
                 Coordinate sparseSite;
 
-                U.Grid()->LocalIndexToLocalCoor(sdx,site);
+                U.Grid()->sdx,site);
                 int t=site[3];
                 int tglb=t+loc2glbshift[3];
                 sparseSite[3]=t;
                 //local site = glb site(shifted)-glb2locashift
-                for(int i=0;i<3;i++){
-                    site[i]=(site[i]+loc2glbshift[i]+zshift[tglb]+ns)%ns;
-                    site[i]-=loc2glbshift[i];
+                site[0]=(site[0]+loc2glbshift[0]+xshift[tglb]+ns)%ns;
+                site[0]-=loc2glbshift[0];
+                site[1]=(site[1]+loc2glbshift[1]+yshift[tglb]+ns)%ns;
+                site[1]-=loc2glbshift[1];
+                site[2]=(site[2]+loc2glbshift[2]+zshift[tglb]+ns)%ns;
+                site[2]-=loc2glbshift[2];
+                for(int i=0;i<3;i++)
                     sparseSite[i]=site[i]/par().inc;
-                }
                 if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
                     if(mu==0){// do v once
                         peekLocalSite(vec,temp,site);
