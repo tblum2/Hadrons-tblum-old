@@ -860,7 +860,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 for(int i=0;i<3;i++){
                     site[i]=(site[i]+loc2glbshift[i]+zshift[tglb]+ns)%ns;
                     site[i]-=loc2glbshift[i];
-                    sparseSite[2]=site[i]/par().inc;
+                    sparseSite[i]=site[i]/par().inc;
                 }
                 if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
                     if(mu==0){// do v once
