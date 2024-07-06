@@ -846,37 +846,42 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             
             // Sparsen
             //for(int t=0; t<nt;t+=par().tinc){
-            thread_for(sdx,localsize,{
+            //thread_for(sdx,localsize,{
+            thread_for_collapse(4,t,loct,{
+                for(int z=0;z<locz;z+=par().inc){
+                    for(int y=0;y<locy;y+=par().inc){
+                        for(int x=0;x<locx;x+=par().inc){
 
-                // local sites on node
-                Coordinate site;
-                Coordinate sparseSite;
+                            // local sites on node
+                            Coordinate site(Nd);
+                            Coordinate sparseSite(Nd);
 
-                U.Grid()->sdx,site);
-                int t=site[3];
-                int tglb=t+loc2glbshift[3];
-                sparseSite[3]=t;
-                //local site = glb site(shifted)-glb2locashift
-                site[0]=(site[0]+loc2glbshift[0]+xshift[tglb]+ns)%ns;
-                site[0]-=loc2glbshift[0];
-                site[1]=(site[1]+loc2glbshift[1]+yshift[tglb]+ns)%ns;
-                site[1]-=loc2glbshift[1];
-                site[2]=(site[2]+loc2glbshift[2]+zshift[tglb]+ns)%ns;
-                site[2]-=loc2glbshift[2];
-                for(int i=0;i<3;i++)
-                    sparseSite[i]=site[i]/par().inc;
-                if(site[0]%par().inc==0 && site[1]%par().inc==0 && site[2]%par().inc==0 ){
-                    if(mu==0){// do v once
-                        peekLocalSite(vec,temp,site);
-                        pokeLocalSite(vec,v[il],sparseSite);
-                        peekLocalSite(vec,temp2,site);
-                        pokeLocalSite(vec,w0[il],sparseSite);
-                    }else if(mu==1){
-                        peekLocalSite(vec,temp2,site);
-                        pokeLocalSite(vec,w1[il],sparseSite);
-                    }else if(mu==2){
-                        peekLocalSite(vec,temp2,site);
-                        pokeLocalSite(vec,w2[il],sparseSite);
+                            int tglb=t+loc2glbshift[3];
+                            sparseSite[3]=t;
+                            // shifted global site=local + loc2glbshift + shift
+                            // then shift back to local
+                            site[0]=(x+loc2glbshift[0]+xshift[tglb]+ns)%ns;
+                            site[0]-=loc2glbshift[0];
+                            site[1]=(y+loc2glbshift[1]+yshift[tglb]+ns)%ns;
+                            site[1]-=loc2glbshift[1];
+                            site[2]=(z+loc2glbshift[2]+zshift[tglb]+ns)%ns;
+                            site[2]-=loc2glbshift[2];
+                            for(int i=0;i<3;i++)
+                                sparseSite[i]=site[i]/par().inc;
+                            
+                            if(mu==0){// do v once
+                                peekLocalSite(vec,temp,site);
+                                pokeLocalSite(vec,v[il],sparseSite);
+                                peekLocalSite(vec,temp2,site);
+                                pokeLocalSite(vec,w0[il],sparseSite);
+                            }else if(mu==1){
+                                peekLocalSite(vec,temp2,site);
+                                pokeLocalSite(vec,w1[il],sparseSite);
+                            }else if(mu==2){
+                                peekLocalSite(vec,temp2,site);
+                                pokeLocalSite(vec,w2[il],sparseSite);
+                            }
+                        }
                     }
                 }
             });
