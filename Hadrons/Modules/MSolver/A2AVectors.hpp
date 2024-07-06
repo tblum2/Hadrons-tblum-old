@@ -814,6 +814,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     localsize = 1;
     for(int d=0;d<Nd;d++)
         localsize=localsize*U.Grid()->_ldimensions[d];
+    int locx=U.Grid()->_ldimensions[0];
+    int locy=U.Grid()->_ldimensions[1];
+    int locz=U.Grid()->_ldimensions[2];
+    int loct=U.Grid()->_ldimensions[3];
     
     for (unsigned int il = 0; il < 2*Nl_; il++)
     {
