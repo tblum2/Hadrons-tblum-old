@@ -861,6 +861,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                             Coordinate sparseSite(Nd);
 
                             int tglb=t+loc2glbshift[3];
+                            site[3]=t;
                             sparseSite[3]=t;
                             // shifted global site=local + loc2glbshift + shift
                             // then shift back to local
