@@ -846,7 +846,8 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             temp2 = Umu*Cshift(temp, mu, 1);
             
             // Sparsen
-            thread_for_collapse(4,t,loct,{
+            //thread_for_collapse(4,t,loct,{
+            thread_for(t,loct,{
                 int tglb=t+tloc2glbshift;
                 for(int z=zshift[tglb];z<locz;z+=par().inc){
                     for(int y=yshift[tglb];y<locy;y+=par().inc){
