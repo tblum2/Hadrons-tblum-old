@@ -789,7 +789,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     //std::random_device rd;  // a seed source for the random number engine
     //std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-    std::uniform_int_distribution<uint32_t> uid(0, ns-1);
+    std::uniform_int_distribution<uint32_t> uid(0, 1);
     std::vector<uint32_t> xshift(nt);
     std::vector<uint32_t> yshift(nt);
     std::vector<uint32_t> zshift(nt);
@@ -805,19 +805,16 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     //save for later
     std::vector<complex<double>> evalM(2*Nl_);
-    // global to local coord shifts
-    std::vector<int> loc2glbshift(4);
-    for(int d=0;d<Nd;d++)
-        loc2glbshift[d]=U.Grid()->_lstart[d];
     
-    uint64_t localsize;
-    localsize = 1;
-    for(int d=0;d<Nd;d++)
-        localsize=localsize*U.Grid()->_ldimensions[d];
+    // global to local coord shift
+    int tloc2glbshift;
+    tloc2glbshift=U.Grid()->_lstart[3];
     int locx=U.Grid()->_ldimensions[0];
     int locy=U.Grid()->_ldimensions[1];
     int locz=U.Grid()->_ldimensions[2];
     int loct=U.Grid()->_ldimensions[3];
+    Coordinate site(Nd);
+    Coordinate sparseSite(Nd);
     
     for (unsigned int il = 0; il < 2*Nl_; il++)
     {
@@ -849,29 +846,18 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             temp2 = Umu*Cshift(temp, mu, 1);
             
             // Sparsen
-            //for(int t=0; t<nt;t+=par().tinc){
-            //thread_for(sdx,localsize,{
             thread_for_collapse(4,t,loct,{
-                for(int z=0;z<locz;z+=par().inc){
-                    for(int y=0;y<locy;y+=par().inc){
-                        for(int x=0;x<locx;x+=par().inc){
+                int tglb=t+tloc2glbshift;
+                for(int z=zshift[tglb];z<locz;z+=par().inc){
+                    for(int y=yshift[tglb];y<locy;y+=par().inc){
+                        for(int x=xshift[tglb];x<locx;x+=par().inc){
 
-                            // local sites on node
-                            Coordinate site(Nd);
-                            Coordinate sparseSite(Nd);
-
-                            int tglb=t+loc2glbshift[3];
+                            site[0]=x;
+                            site[1]=y;
+                            site[2]=z;
                             site[3]=t;
                             sparseSite[3]=t;
-                            // shifted global site=local + loc2glbshift + shift
-                            // then shift back to local
-                            site[0]=(x+loc2glbshift[0]+xshift[tglb]+ns)%ns;
-                            site[0]-=loc2glbshift[0];
-                            site[1]=(y+loc2glbshift[1]+yshift[tglb]+ns)%ns;
-                            site[1]-=loc2glbshift[1];
-                            site[2]=(z+loc2glbshift[2]+zshift[tglb]+ns)%ns;
-                            site[2]-=loc2glbshift[2];
-                            for(int i=0;i<3;i++)
+                            for(int i=0;i<Nd-1;i++)
                                 sparseSite[i]=site[i]/par().inc;
                             
                             if(mu==0){// do v once
