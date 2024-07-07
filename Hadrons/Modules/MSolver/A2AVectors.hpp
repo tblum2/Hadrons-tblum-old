@@ -789,15 +789,23 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     
     //std::random_device rd;  // a seed source for the random number engine
     //std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
+    // sparsen on even or odd sites on time slice
     std::uniform_int_distribution<uint32_t> uid(0, 1);
     std::vector<uint32_t> xshift(nt);
     std::vector<uint32_t> yshift(nt);
     std::vector<uint32_t> zshift(nt);
-    
-    for(int t=0;t<nt;t++){
-        xshift[t]=uid(rngSerial()._generators[0]);
-        yshift[t]=uid(rngSerial()._generators[0]);
-        zshift[t]=uid(rngSerial()._generators[0]);
+    if(par().inc != 1){
+        for(int t=0;t<nt;t++){
+            xshift[t]=uid(rngSerial()._generators[0]);
+            yshift[t]=uid(rngSerial()._generators[0]);
+            zshift[t]=uid(rngSerial()._generators[0]);
+        }
+    }else{//will miss site 0000 otherwise
+        for(int t=0;t<nt;t++){
+            xshift[t]=0;
+            yshift[t]=0;
+            zshift[t]=0;
+        }
     }
     CartesianCommunicator::BroadcastWorld(0,(void *)&xshift[0],sizeof(uint32_t)*xshift.size());
     CartesianCommunicator::BroadcastWorld(0,(void *)&yshift[0],sizeof(uint32_t)*yshift.size());
