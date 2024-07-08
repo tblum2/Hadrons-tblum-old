@@ -782,7 +782,6 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
         
     ComplexField phases(U.Grid());
     int shift;
-    ColourVector vec;
     FermionField temp(U.Grid());
     FermionField temp2(U.Grid());
     //SparseFermionField temp3(&sparseGrid);
@@ -821,9 +820,6 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     int locy=U.Grid()->_ldimensions[1];
     int locz=U.Grid()->_ldimensions[2];
     int loct=U.Grid()->_ldimensions[3];
-    Coordinate site(Nd);
-    Coordinate sparseSite(Nd);
-    
     for (unsigned int il = 0; il < 2*Nl_; il++)
     {
         // eval of unpreconditioned Dirac op
@@ -856,11 +852,15 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             // Sparsen
             //thread_for_collapse(4,t,loct,{
             thread_for(t,loct,{
+
                 int tglb=t+tloc2glbshift;
+                Coordinate site(Nd);
+                Coordinate sparseSite(Nd);
+                ColourVector vec;
                 for(int z=zshift[tglb];z<locz;z+=par().inc){
                     for(int y=yshift[tglb];y<locy;y+=par().inc){
                         for(int x=xshift[tglb];x<locx;x+=par().inc){
-
+                            
                             site[0]=x;
                             site[1]=y;
                             site[2]=z;
