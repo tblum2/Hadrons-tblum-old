@@ -793,7 +793,9 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     std::vector<uint32_t> xshift(nt);
     std::vector<uint32_t> yshift(nt);
     std::vector<uint32_t> zshift(nt);
-    if(par().inc != 1){
+    if(par().inc != 1){// only need even time slice shifts
+                       // since we will sum over hypercubes
+                       // but do all anyway
         for(int t=0;t<nt;t++){
             xshift[t]=uid(rngSerial()._generators[0]);
             yshift[t]=uid(rngSerial()._generators[0]);
@@ -820,6 +822,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     int locy=U.Grid()->_ldimensions[1];
     int locz=U.Grid()->_ldimensions[2];
     int loct=U.Grid()->_ldimensions[3];
+    
+    // step size for hypercube loop
+    int step=2*par().inc;
+    
     for (unsigned int il = 0; il < 2*Nl_; il++)
     {
         // eval of unpreconditioned Dirac op
@@ -850,36 +856,57 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             temp2 = Umu*Cshift(temp, mu, 1);
             
             // Sparsen
-            //thread_for_collapse(4,t,loct,{
             thread_for(t,loct,{
 
                 int tglb=t+tloc2glbshift;
+                // same random shift for t, t+1 in same hypercube
+                if(tglb%2 == 1) continue;
+                
                 Coordinate site(Nd);
                 Coordinate sparseSite(Nd);
                 ColourVector vec;
-                for(int z=zshift[tglb];z<locz;z+=par().inc){
-                    for(int y=yshift[tglb];y<locy;y+=par().inc){
-                        for(int x=xshift[tglb];x<locx;x+=par().inc){
+                
+                // loop over hypercubes
+                for(int z=zshift[tglb];z<locz;z+=step){
+                    for(int y=yshift[tglb];y<locy;y+=step){
+                        for(int x=xshift[tglb];x<locx;x+=step){
                             
                             site[0]=x;
                             site[1]=y;
                             site[2]=z;
                             site[3]=t;
-                            sparseSite[3]=t;
+                            sparseSite[3]=site[3];
                             for(int i=0;i<Nd-1;i++)
-                                sparseSite[i]=site[i]/par().inc;
+                                sparseSite[i]=site[i]/step;
                             
-                            if(mu==0){// do v once
-                                peekLocalSite(vec,temp,site);
-                                pokeLocalSite(vec,v[il],sparseSite);
-                                peekLocalSite(vec,temp2,site);
-                                pokeLocalSite(vec,w0[il],sparseSite);
-                            }else if(mu==1){
-                                peekLocalSite(vec,temp2,site);
-                                pokeLocalSite(vec,w1[il],sparseSite);
-                            }else if(mu==2){
-                                peekLocalSite(vec,temp2,site);
-                                pokeLocalSite(vec,w2[il],sparseSite);
+                            // loop within hypercube
+                            for(int that=0;that<2;that++){
+                                site[3]+=that;
+                                sparseSite[3]+=that;
+                                for(int zhat=0;zhat<2;zhat++){
+                                    site[2]+=zhat;
+                                    sparseSite[2]+=zhat;
+                                    for(int yhat=0;yhat<2;yhat++){
+                                        site[1]+=yhat;
+                                        sparseSite[1]+=yhat;
+                                        for(int xhat=0;xhat<2;xhat++){
+                                            site[0]+=xhat;
+                                            sparseSite[0]+=xhat;
+                                            if(mu==0){// do v once
+                                                peekLocalSite(vec,temp,site);
+                                                pokeLocalSite(vec,v[il],sparseSite);
+                                                peekLocalSite(vec,temp2,site);
+                                                pokeLocalSite(vec,w0[il],sparseSite);
+                                            }else if(mu==1){
+                                                peekLocalSite(vec,temp2,site);
+                                                pokeLocalSite(vec,w1[il],sparseSite);
+                                            }else if(mu==2){
+                                                peekLocalSite(vec,temp2,site);
+                                                pokeLocalSite(vec,w2[il],sparseSite);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
