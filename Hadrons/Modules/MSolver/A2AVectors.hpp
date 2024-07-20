@@ -860,8 +860,10 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
 
                 int tglb=t+tloc2glbshift;
                 // same random shift for t, t+1 in same hypercube
-                if(tglb%2 == 1) continue;
+                if(t%2 == 1) continue;
                 
+                Coordinate hc(Nd);
+                Coordinate sparseHc(Nd);
                 Coordinate site(Nd);
                 Coordinate sparseSite(Nd);
                 ColourVector vec;
@@ -871,27 +873,28 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                     for(int y=yshift[tglb];y<locy;y+=step){
                         for(int x=xshift[tglb];x<locx;x+=step){
                             
-                            site[0]=x;
-                            site[1]=y;
-                            site[2]=z;
-                            site[3]=t;
-                            sparseSite[3]=site[3];
+                            // hypercube origin
+                            hc[0]=x;
+                            hc[1]=y;
+                            hc[2]=z;
+                            hc[3]=t;
+                            sparseHc[3]=hc[3];
                             for(int i=0;i<Nd-1;i++)
-                                sparseSite[i]=site[i]/step;
+                                sparseHc[i]=hc[i]/step;
                             
                             // loop within hypercube
                             for(int that=0;that<2;that++){
-                                site[3]+=that;
-                                sparseSite[3]+=that;
+                                site[3]=hc[3]+that;
+                                sparseSite[3]=sparseHc[3]+that;
                                 for(int zhat=0;zhat<2;zhat++){
-                                    site[2]+=zhat;
-                                    sparseSite[2]+=zhat;
+                                    site[2]=hc[2]+zhat;
+                                    sparseSite[2]=sparseHc[2]+zhat;
                                     for(int yhat=0;yhat<2;yhat++){
-                                        site[1]+=yhat;
-                                        sparseSite[1]+=yhat;
+                                        site[1]=hc[1]+yhat;
+                                        sparseSite[1]=sparseHc[1]+yhat;
                                         for(int xhat=0;xhat<2;xhat++){
-                                            site[0]+=xhat;
-                                            sparseSite[0]+=xhat;
+                                            site[0]=hc[0]+xhat;
+                                            sparseSite[0]=sparseHc[0]+xhat;
                                             if(mu==0){// do v once
                                                 peekLocalSite(vec,temp,site);
                                                 pokeLocalSite(vec,v[il],sparseSite);
