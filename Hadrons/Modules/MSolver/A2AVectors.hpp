@@ -880,7 +880,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                             hc[3]=t;
                             sparseHc[3]=hc[3];
                             for(int i=0;i<Nd-1;i++)
-                                sparseHc[i]=hc[i]/step;
+                                sparseHc[i]=hc[i]/par().inc;
                             
                             // loop within hypercube
                             for(int that=0;that<2;that++){
