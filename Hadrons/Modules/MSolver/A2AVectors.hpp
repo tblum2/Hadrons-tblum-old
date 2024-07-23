@@ -867,29 +867,30 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 Coordinate sparseSite(Nd);
                 ColourVector vec;
                 
-                for(int that=0;that<2;that++){
-                    sparseSite[3]=site[3]+that;
-                    // loop over hypercubes on time slice
-                    // and sparsen, keep all sites in hypercube
-                    for(int zg=zshift[tglb];zg<ns;zg+=step){
-                        for(int z=0;z<locz;z++){
-                            int zgp=z+lstartz;
-                            if(zgp==zg || zgp==zg+1){
-                                site[2]=z;
-                                sparseSite[2]=site[2]/par().inc;
-                                for(int yg=yshift[tglb];yg<ns;yg+=step){
-                                    for(int y=0;y<locy;y++){
-                                        int ygp=y+lstarty;
-                                        if(ygp==yg || ygp==yg+1){
-                                            site[1]=y;
-                                            sparseSite[1]=site[1]/par().inc;
-                                            for(int xg=xshift[tglb];xg<ns;xg+=step){
-                                                for(int x=0;x<locx;x++){
-                                                    int xgp=x+lstartx;
-                                                    if(xgp==xg || xgp==xg+1){
-                                                        site[0]=x;
-                                                        sparseSite[0]=site[0]/par().inc;
-                                                        
+                
+                // loop over hypercubes on time slice
+                // and sparsen, keep all sites in hypercube
+                for(int zg=zshift[tglb];zg<ns;zg+=step){
+                    for(int z=0;z<locz;z++){
+                        int zgp=z+lstartz;
+                        if(zgp==zg || zgp==zg+1){
+                            site[2]=z;
+                            sparseSite[2]=site[2]/par().inc;
+                            for(int yg=yshift[tglb];yg<ns;yg+=step){
+                                for(int y=0;y<locy;y++){
+                                    int ygp=y+lstarty;
+                                    if(ygp==yg || ygp==yg+1){
+                                        site[1]=y;
+                                        sparseSite[1]=site[1]/par().inc;
+                                        for(int xg=xshift[tglb];xg<ns;xg+=step){
+                                            for(int x=0;x<locx;x++){
+                                                int xgp=x+lstartx;
+                                                if(xgp==xg || xgp==xg+1){
+                                                    site[0]=x;
+                                                    sparseSite[0]=site[0]/par().inc;
+                                                    for(int that=0;that<2;that++){
+                                                        site[3]=t+that;
+                                                        sparseSite[3]=site[3];
                                                         if(mu==0){// do v once
                                                             peekLocalSite(vec,temp,site);
                                                             pokeLocalSite(vec,v[il],sparseSite);
