@@ -816,13 +816,15 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     std::vector<complex<double>> evalM(2*Nl_);
     
     // global to local coord shift
-    int tloc2glbshift;
-    tloc2glbshift=U.Grid()->_lstart[3];
+    int tloc2glbshift=U.Grid()->_lstart[3];
     int locx=U.Grid()->_ldimensions[0];
     int locy=U.Grid()->_ldimensions[1];
     int locz=U.Grid()->_ldimensions[2];
     int loct=U.Grid()->_ldimensions[3];
-    
+    int lstartx=U.Grid()->_lstart[0];
+    int lstarty=U.Grid()->_lstart[1];
+    int lstartz=U.Grid()->_lstart[2];
+        
     // step size for hypercube loop
     int step=2*par().inc;
     
@@ -855,57 +857,53 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             // v vec is shifted and * link for conserved current
             temp2 = Umu*Cshift(temp, mu, 1);
             
-            // Sparsen
             thread_for(t,loct,{
 
                 int tglb=t+tloc2glbshift;
                 // same random shift for t, t+1 in same hypercube
                 if(t%2 == 1) continue;
                 
-                Coordinate hc(Nd);
-                Coordinate sparseHc(Nd);
                 Coordinate site(Nd);
                 Coordinate sparseSite(Nd);
                 ColourVector vec;
                 
-                // loop over hypercubes
-                for(int z=zshift[tglb];z<locz;z+=step){
-                    for(int y=yshift[tglb];y<locy;y+=step){
-                        for(int x=xshift[tglb];x<locx;x+=step){
-                            
-                            // hypercube origin
-                            hc[0]=x;
-                            hc[1]=y;
-                            hc[2]=z;
-                            hc[3]=t;
-                            sparseHc[3]=hc[3];
-                            for(int i=0;i<Nd-1;i++)
-                                sparseHc[i]=hc[i]/par().inc;
-                            
-                            // loop within hypercube
-                            for(int that=0;that<2;that++){
-                                site[3]=hc[3]+that;
-                                sparseSite[3]=sparseHc[3]+that;
-                                for(int zhat=0;zhat<2;zhat++){
-                                    site[2]=hc[2]+zhat;
-                                    sparseSite[2]=sparseHc[2]+zhat;
-                                    for(int yhat=0;yhat<2;yhat++){
-                                        site[1]=hc[1]+yhat;
-                                        sparseSite[1]=sparseHc[1]+yhat;
-                                        for(int xhat=0;xhat<2;xhat++){
-                                            site[0]=hc[0]+xhat;
-                                            sparseSite[0]=sparseHc[0]+xhat;
-                                            if(mu==0){// do v once
-                                                peekLocalSite(vec,temp,site);
-                                                pokeLocalSite(vec,v[il],sparseSite);
-                                                peekLocalSite(vec,temp2,site);
-                                                pokeLocalSite(vec,w0[il],sparseSite);
-                                            }else if(mu==1){
-                                                peekLocalSite(vec,temp2,site);
-                                                pokeLocalSite(vec,w1[il],sparseSite);
-                                            }else if(mu==2){
-                                                peekLocalSite(vec,temp2,site);
-                                                pokeLocalSite(vec,w2[il],sparseSite);
+                for(int that=0;that<2;that++){
+                    sparseSite[3]=site[3]+that;
+                    // loop over hypercubes on time slice
+                    // and sparsen, keep all sites in hypercube
+                    for(int zg=zshift[tglb];zg<ns;zg+=step){
+                        for(int z=0;z<locz;z++){
+                            int zgp=z+lstartz;
+                            if(zgp==zg || zgp==zg+1){
+                                site[2]=z;
+                                sparseSite[2]=site[2]/par().inc;
+                                for(int yg=yshift[tglb];yg<ns;yg+=step){
+                                    for(int y=0;y<locy;y++){
+                                        int ygp=y+lstarty;
+                                        if(ygp==yg || ygp==yg+1){
+                                            site[1]=y;
+                                            sparseSite[1]=site[1]/par().inc;
+                                            for(int xg=xshift[tglb];xg<ns;xg+=step){
+                                                for(int x=0;x<locx;x++){
+                                                    int xgp=x+lstartx;
+                                                    if(xgp==xg || xgp==xg+1){
+                                                        site[0]=x;
+                                                        sparseSite[0]=site[0]/par().inc;
+                                                        
+                                                        if(mu==0){// do v once
+                                                            peekLocalSite(vec,temp,site);
+                                                            pokeLocalSite(vec,v[il],sparseSite);
+                                                            peekLocalSite(vec,temp2,site);
+                                                            pokeLocalSite(vec,w0[il],sparseSite);
+                                                        }else if(mu==1){
+                                                            peekLocalSite(vec,temp2,site);
+                                                            pokeLocalSite(vec,w1[il],sparseSite);
+                                                        }else if(mu==2){
+                                                            peekLocalSite(vec,temp2,site);
+                                                            pokeLocalSite(vec,w2[il],sparseSite);
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
