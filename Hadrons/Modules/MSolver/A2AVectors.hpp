@@ -786,16 +786,16 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     FermionField temp2(U.Grid());
     //SparseFermionField temp3(&sparseGrid);
     
+    // step size for hypercube loop
+    int step=2*par().inc;
     //std::random_device rd;  // a seed source for the random number engine
     //std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-    // sparsen on even or odd sites on time slice
-    std::uniform_int_distribution<uint32_t> uid(0, 1);
+    // sparsen on time slice starting anywhere between 0 and step, inclusive
+    std::uniform_int_distribution<uint32_t> uid(0, step);
     std::vector<uint32_t> xshift(nt);
     std::vector<uint32_t> yshift(nt);
     std::vector<uint32_t> zshift(nt);
-    if(par().inc != 1){// only need even time slice shifts
-                       // since we will sum over hypercubes
-                       // but do all anyway
+    if(par().inc != 1){
         for(int t=0;t<nt;t++){
             xshift[t]=uid(rngSerial()._generators[0]);
             yshift[t]=uid(rngSerial()._generators[0]);
@@ -815,8 +815,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     //save for later
     std::vector<complex<double>> evalM(2*Nl_);
     
-    // global to local coord shift
-    int tloc2glbshift=U.Grid()->_lstart[3];
+    // global to local coord shifts
     int locx=U.Grid()->_ldimensions[0];
     int locy=U.Grid()->_ldimensions[1];
     int locz=U.Grid()->_ldimensions[2];
@@ -824,9 +823,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     int lstartx=U.Grid()->_lstart[0];
     int lstarty=U.Grid()->_lstart[1];
     int lstartz=U.Grid()->_lstart[2];
-        
-    // step size for hypercube loop
-    int step=2*par().inc;
+    int lstartt=U.Grid()->_lstart[3];
     
     for (unsigned int il = 0; il < 2*Nl_; il++)
     {
@@ -859,7 +856,7 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
             
             thread_for(t,loct,{
 
-                int tglb=t+tloc2glbshift;
+                int tglb=t+lstartt;
                 // same random shift for t, t+1 in same hypercube
                 if(t%2 == 1) continue;
                 
