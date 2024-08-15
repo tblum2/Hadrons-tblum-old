@@ -790,8 +790,8 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
     int step=2*par().inc;
     //std::random_device rd;  // a seed source for the random number engine
     //std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-    // sparsen on time slice starting anywhere between 0 and step, inclusive
-    std::uniform_int_distribution<uint32_t> uid(0, step);
+    // sparsen on time slice starting anywhere between 0 and step-1, inclusive
+    std::uniform_int_distribution<uint32_t> uid(0, step-1);
     std::vector<uint32_t> xshift(nt);
     std::vector<uint32_t> yshift(nt);
     std::vector<uint32_t> zshift(nt);
