@@ -870,19 +870,19 @@ void TStagSparseA2AVectors<FImpl, Pack>::execute(void)
                 for(int zg=zshift[tglb];zg<ns;zg+=step){
                     for(int z=0;z<locz;z++){
                         int zgp=z+lstartz;
-                        if(zgp==zg || zgp==zg+1){
+                        if(zgp==zg || zgp==(zg+1)%ns){
                             site[2]=z;
                             sparseSite[2]=site[2]/par().inc;
                             for(int yg=yshift[tglb];yg<ns;yg+=step){
                                 for(int y=0;y<locy;y++){
                                     int ygp=y+lstarty;
-                                    if(ygp==yg || ygp==yg+1){
+                                    if(ygp==yg || ygp==(yg+1)%ns){
                                         site[1]=y;
                                         sparseSite[1]=site[1]/par().inc;
                                         for(int xg=xshift[tglb];xg<ns;xg+=step){
                                             for(int x=0;x<locx;x++){
                                                 int xgp=x+lstartx;
-                                                if(xgp==xg || xgp==xg+1){
+                                                if(xgp==xg || xgp==(xg+1)%ns){
                                                     site[0]=x;
                                                     sparseSite[0]=site[0]/par().inc;
                                                     for(int that=0;that<2;that++){
